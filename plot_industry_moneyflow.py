@@ -210,7 +210,7 @@ def plot_industry_moneyflow(token=None, date=None, top_n=10, save_fig=True, show
 
             # 显示图表
             if show_fig:
-plt.show()
+                plt.show()
             else:
                 plt.close()
 
