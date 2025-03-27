@@ -238,21 +238,13 @@ def get_industry_stocks(pro, industry_code, trade_date=None, retries=3, retry_de
     print(f"获取行业 {industry_code} 的成分股...")
     
     try:
-        # 尝试使用指数成分接口获取同花顺行业成分股
+        # 注意: 根据测试结果，直接使用ths_member接口获取同花顺行业成分股效果更好
+        # 不再尝试使用index_weight接口，减少API调用次数和等待时间
         stock_list = []
         
         for attempt in range(retries):
             try:
-                # 先尝试使用index_weight获取成分股
-                df = get_data_with_retry(pro.index_weight, index_code=industry_code, trade_date=trade_date)
-                
-                if not df.empty:
-                    stock_list = df['con_code'].tolist()
-                    print(f"通过index_weight成功获取到 {len(stock_list)} 支成分股")
-                    return stock_list
-                
-                # 如果通过index_weight获取失败，尝试使用ths_member获取成分股
-                print("index_weight接口返回为空，尝试使用ths_member接口...")
+                # 直接使用ths_member获取成分股
                 df = get_data_with_retry(pro.ths_member, ts_code=industry_code)
                 
                 if not df.empty:
@@ -260,7 +252,7 @@ def get_industry_stocks(pro, industry_code, trade_date=None, retries=3, retry_de
                     print(f"通过ths_member成功获取到 {len(stock_list)} 支成分股")
                     return stock_list
                 
-                # 两种方法都失败，等待后重试
+                # 获取失败，等待后重试
                 print(f"第{attempt+1}次尝试获取行业成分股失败，{retry_delay}秒后重试...")
                 time.sleep(retry_delay)
                 retry_delay *= 1.5  # 使用指数退避策略
