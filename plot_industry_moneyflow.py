@@ -5,40 +5,84 @@ import numpy as np # 导入numpy用于数值计算
 from datetime import datetime, timedelta  # 导入日期处理相关模块
 import time  # 用于重试间隔
 import requests  # 用于捕获请求异常
+import os  # 用于文件路径操作
 
 # 设置matplotlib支持中文显示
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置默认字体为黑体
 plt.rcParams['axes.unicode_minus'] = False  # 解决保存图像时负号'-'显示为方块的问题
 
-def get_data_with_retry(func, **kwargs):
+def get_data_with_retry(func, max_retries=5, retry_delay=2, **kwargs):
     """
     带有重试机制的数据获取函数
     
     参数:
     func: 要调用的函数
+    max_retries: 最大重试次数
+    retry_delay: 初始重试延迟(秒)
     kwargs: 传递给func的参数
     
     返回:
     func的返回结果或空DataFrame
     """
-    max_retries = 5
-    retry_delay = 2  # 初始延迟2秒
-    
     for attempt in range(max_retries):
         try:
-            return func(**kwargs)
+            result = func(**kwargs)
+            # 检查结果是否为空DataFrame
+            if isinstance(result, pd.DataFrame) and result.empty:
+                if attempt == max_retries - 1:
+                    print(f"尝试{max_retries}次后获取到空数据")
+                    return pd.DataFrame()
+                    
+                print(f"第{attempt+1}次请求返回空数据，{retry_delay:.1f}秒后重试...")
+                time.sleep(retry_delay)
+                retry_delay *= 1.5  # 指数退避策略
+                continue
+            
+            return result
         except (requests.exceptions.ChunkedEncodingError, 
                 requests.exceptions.ConnectionError,
-                requests.exceptions.Timeout) as e:
+                requests.exceptions.Timeout,
+                Exception) as e:
             if attempt == max_retries - 1:
                 print(f"尝试{max_retries}次后仍然失败: {e}")
-                return pd.DataFrame()  # 返回空DataFrame
+                return pd.DataFrame()
                 
-            print(f"第{attempt+1}次请求失败: {e}，{retry_delay}秒后重试...")
+            print(f"第{attempt+1}次请求失败: {e}，{retry_delay:.1f}秒后重试...")
             time.sleep(retry_delay)
             retry_delay *= 1.5  # 指数退避策略
     
-    return pd.DataFrame()  # 如果所有尝试都失败
+    return pd.DataFrame()
+
+def get_latest_trade_date(pro, days_back=5):
+    """
+    获取最近的交易日期
+    
+    参数:
+    pro: tushare pro接口
+    days_back: 向前查找的天数
+    
+    返回:
+    str: 最近的交易日期，格式为YYYYMMDD
+    """
+    today = datetime.now()
+    end_date = today.strftime('%Y%m%d')
+    start_date = (today - timedelta(days=days_back)).strftime('%Y%m%d')
+    
+    try:
+        # 获取交易日历
+        trade_cal = get_data_with_retry(pro.trade_cal, exchange='SSE', 
+                                     start_date=start_date, 
+                                     end_date=end_date, 
+                                     is_open='1')
+        if not trade_cal.empty:
+            # 获取最近的交易日
+            latest_trade_date = trade_cal['cal_date'].iloc[-1]
+            return latest_trade_date
+    except Exception as e:
+        print(f"获取最近交易日期失败: {e}")
+    
+    # 如果获取失败，返回当前日期
+    return end_date
 
 def plot_industry_moneyflow(token=None, date=None, top_n=10, save_fig=True, show_fig=True):
     """
@@ -57,31 +101,30 @@ def plot_industry_moneyflow(token=None, date=None, top_n=10, save_fig=True, show
     # 初始化tushare API
     if token is None:
         token = '284b804f2f919ea85cb7e6dfe617ff81f123c80b4cd3c4b13b35d736'
+    
     pro = ts.pro_api(token)
     
     # 获取查询日期
     if date is None:
-        today = datetime.now().strftime('%Y%m%d')
-    else:
-        today = date
+        date = get_latest_trade_date(pro)
     
-    # 尝试获取当天数据，如果为空则尝试前一天
-    print(f"尝试获取 {today} 的数据")
-    df = get_data_with_retry(pro.moneyflow_ind_ths, trade_date=today)
+    # 尝试获取当天数据
+    print(f"尝试获取 {date} 的行业资金流向数据")
+    df = get_data_with_retry(pro.moneyflow_ind_ths, trade_date=date)
 
     # 如果数据为空，尝试获取前一天的数据
     if df.empty and date is None:
         yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y%m%d')
         print(f"当天数据为空，尝试获取 {yesterday} 的数据")
         df = get_data_with_retry(pro.moneyflow_ind_ths, trade_date=yesterday)
-        today = yesterday
+        date = yesterday
 
     # 如果数据仍为空，再尝试前一天
     if df.empty and date is None:
         day_before_yesterday = (datetime.now() - timedelta(days=2)).strftime('%Y%m%d')
         print(f"前一天数据也为空，尝试获取 {day_before_yesterday} 的数据")
         df = get_data_with_retry(pro.moneyflow_ind_ths, trade_date=day_before_yesterday)
-        today = day_before_yesterday
+        date = day_before_yesterday
 
     # 检查数据是否为空
     if df.empty:
@@ -96,11 +139,12 @@ def plot_industry_moneyflow(token=None, date=None, top_n=10, save_fig=True, show
                             -0.65, 0.54, -0.43, 0.37, -0.31, 0.25, -0.21, 0.15, -0.12, 0.08]
         }
         df = pd.DataFrame(test_data)
-        today = datetime.now().strftime('%Y%m%d')
+        date = datetime.now().strftime('%Y%m%d')
 
     print("获取到的数据：")
     print(df.head())
     print(f"数据列名: {df.columns.tolist()}")
+    print(f"共获取到 {len(df)} 条记录")
 
     # 添加行业名称字典，如果可能的话，转换行业代码为行业名称
     # 检查列名是否存在
@@ -114,7 +158,8 @@ def plot_industry_moneyflow(token=None, date=None, top_n=10, save_fig=True, show
 
     # 将净流入金额直接使用，因为已经是亿为单位
     if 'net_amount' in df.columns:
-        # 不需要再转换单位
+        # 确保净流入金额为数值类型
+        df['net_amount'] = pd.to_numeric(df['net_amount'], errors='coerce')
         df['net_amount_yiyuan'] = df['net_amount']  # 已经是亿元单位
         
         # 按净流入金额从大到小排序
@@ -159,8 +204,11 @@ def plot_industry_moneyflow(token=None, date=None, top_n=10, save_fig=True, show
                     plt.text(bar.get_x() + bar.get_width()/2., height - 0.1, 
                             f"{height:.2f}", ha='center', va='top', fontsize=9)
 
+            # 格式化日期
+            formatted_date = f"{date[:4]}-{date[4:6]}-{date[6:]}" if len(date) == 8 else date
+            
             # 添加标题和标签
-            plt.title(f"{today} 行业资金净流入排行(前{top_n}与后{top_n})", fontsize=18, pad=15)
+            plt.title(f"{formatted_date} 行业资金净流入排行(前{top_n}与后{top_n})", fontsize=18, pad=15)
             plt.xlabel('行业', fontsize=14, labelpad=10)
             plt.ylabel('净流入金额（亿元）', fontsize=14, labelpad=10)
 
@@ -204,9 +252,9 @@ def plot_industry_moneyflow(token=None, date=None, top_n=10, save_fig=True, show
 
             # 保存图片
             if save_fig:
-                filename = f'industry_moneyflow_top_bottom_{today}.png'
+                filename = f'industry_moneyflow_top_bottom_{date}.png'
                 plt.savefig(filename, dpi=300, bbox_inches='tight')
-                print(f"图表已保存为 {filename}")
+                print(f"图表已保存为 {os.path.abspath(filename)}")
 
             # 显示图表
             if show_fig:

@@ -108,7 +108,7 @@ def get_top_stocks_by_industry(token=None, date=None, top_industry_count=3, top_
         print(f"\n分析行业: {industry_name}")  # 打印当前正在分析的行业名称
         
         # 获取行业成分股
-        stocks_in_industry = get_industry_stocks(pro, industry_name, industry_code)  # 调用函数获取该行业的所有股票
+        stocks_in_industry = get_industry_stocks(pro, industry_code, trade_date)  # 调用函数获取该行业的所有股票
         
         if not stocks_in_industry:  # 如果没有找到该行业的股票
             print(f"未找到行业 {industry_name} 的成分股信息")  # 打印警告信息
@@ -185,57 +185,63 @@ def get_data_with_retry(func, max_retries=5, **kwargs):
     
     return pd.DataFrame()  # 如果所有尝试都失败，返回空DataFrame
 
-def get_industry_stocks(pro, industry_name, industry_code=None):
+def get_industry_stocks(pro, industry_code, trade_date=None, retries=3, retry_delay=2):
     """
     获取行业成分股
     
     参数:
-    pro: tushare pro接口
-    industry_name: 行业名称
-    industry_code: 行业代码
+    pro: tushare pro API实例
+    industry_code: 行业代码，格式为'881101.TI'
+    trade_date: 交易日期，格式为'YYYYMMDD'，默认为None使用最近交易日
+    retries: 重试次数
+    retry_delay: 重试延迟(秒)
     
     返回:
-    list: 行业成分股列表
+    list: 行业成分股代码列表
     """
-    try:
-        # 使用指数成分和权重API接口获取成分股
-        if industry_code:
-            print(f"尝试使用指数成分API获取行业 {industry_name}(代码:{industry_code}) 的成分股...")
-            # 使用index_weight接口获取行业指数成分股
-            df = get_data_with_retry(pro.index_weight, index_code=industry_code)
-            if not df.empty:
-                print(f"成功获取到 {len(df)} 支成分股数据")
-                return df['con_code'].tolist()
-            else:
-                print(f"未能通过指数成分API获取成分股，将尝试其他方法")
-        
-        # 如果上面的方法失败，使用股票列表接口获取全部股票，然后按行业过滤
-        print(f"通过股票基本信息API按行业名称 '{industry_name}' 筛选股票...")
-        stocks = get_data_with_retry(pro.stock_basic, exchange='', list_status='L', 
-                                    fields='ts_code,name,industry')
-        
-        if stocks.empty:
-            print(f"获取股票列表失败")
-            return []
-        
-        # 筛选指定行业的股票
-        industry_stocks = stocks[stocks['industry'] == industry_name]
-        
-        if industry_stocks.empty:
-            # 尝试模糊匹配
-            print(f"未找到精确匹配行业名称的股票，尝试模糊匹配...")
-            industry_stocks = stocks[stocks['industry'].str.contains(industry_name, na=False)]
-        
-        if not industry_stocks.empty:
-            print(f"通过行业名称筛选获得 {len(industry_stocks)} 支股票")
-            return industry_stocks['ts_code'].tolist()
-        else:
-            # 如果还是找不到，返回一些大盘股作为例子
-            print(f"未找到行业 {industry_name} 的股票，使用大盘股作为示例")
-            return stocks.head(50)['ts_code'].tolist()
+    print(f"获取行业 {industry_code} 的成分股...")
     
+    try:
+        # 尝试使用指数成分接口获取同花顺行业成分股
+        stock_list = []
+        
+        for attempt in range(retries):
+            try:
+                # 先尝试使用index_weight获取成分股
+                df = get_data_with_retry(pro.index_weight, index_code=industry_code, trade_date=trade_date)
+                
+                if not df.empty:
+                    stock_list = df['con_code'].tolist()
+                    print(f"通过index_weight成功获取到 {len(stock_list)} 支成分股")
+                    return stock_list
+                
+                # 如果通过index_weight获取失败，尝试使用ths_member获取成分股
+                print("index_weight接口返回为空，尝试使用ths_member接口...")
+                df = get_data_with_retry(pro.ths_member, ts_code=industry_code)
+                
+                if not df.empty:
+                    stock_list = df['code'].tolist()
+                    print(f"通过ths_member成功获取到 {len(stock_list)} 支成分股")
+                    return stock_list
+                
+                # 两种方法都失败，等待后重试
+                print(f"第{attempt+1}次尝试获取行业成分股失败，{retry_delay}秒后重试...")
+                time.sleep(retry_delay)
+                retry_delay *= 1.5  # 使用指数退避策略
+            
+            except Exception as e:
+                print(f"获取行业成分股时出错: {e}")
+                if attempt < retries - 1:
+                    print(f"第{attempt+1}次尝试失败，{retry_delay}秒后重试...")
+                    time.sleep(retry_delay)
+                    retry_delay *= 1.5
+        
+        # 如果所有尝试都失败，返回空列表
+        print(f"尝试{retries}次后仍无法获取行业 {industry_code} 的成分股")
+        return []
+        
     except Exception as e:
-        print(f"获取行业成分股时出错: {e}")
+        print(f"获取行业成分股时发生异常: {e}")
         return []
 
 def get_stocks_moneyflow(pro, stock_list, trade_date):

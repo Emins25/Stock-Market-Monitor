@@ -10,6 +10,36 @@ import requests  # 用于捕获请求异常
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置默认字体为黑体
 plt.rcParams['axes.unicode_minus'] = False  # 解决保存图像时负号'-'显示为方块的问题
 
+def get_data_with_retry(func, max_retries=5, **kwargs):
+    """
+    带有重试机制的数据获取函数
+    
+    参数:
+    func: 要调用的函数
+    max_retries: 最大重试次数
+    kwargs: 传递给func的参数
+    
+    返回:
+    func的返回结果或空DataFrame
+    """
+    retry_delay = 2  # 初始延迟2秒
+    
+    for attempt in range(max_retries):
+        try:
+            return func(**kwargs)
+        except (requests.exceptions.ChunkedEncodingError, 
+                requests.exceptions.ConnectionError,
+                requests.exceptions.Timeout) as e:
+            if attempt == max_retries - 1:
+                print(f"尝试{max_retries}次后仍然失败: {e}")
+                return pd.DataFrame()
+                
+            print(f"第{attempt+1}次请求失败: {e}，{retry_delay}秒后重试...")
+            time.sleep(retry_delay)
+            retry_delay *= 1.5  # 指数退避策略，增加重试间隔
+    
+    return pd.DataFrame()
+
 def plot_index_performance(index_names=None, start_date=None, end_date=None, save_fig=True, show_fig=True, token=None):
     """
     绘制指数涨跌幅排行柱状图
@@ -58,7 +88,8 @@ def plot_index_performance(index_names=None, start_date=None, end_date=None, sav
     df_list = []
     for index_code in index_list:
         try:
-            df_index = pro.index_daily(ts_code=index_code, start_date=start_date, end_date=end_date)
+            # 使用带重试机制的函数获取指数数据
+            df_index = get_data_with_retry(pro.index_daily, ts_code=index_code, start_date=start_date, end_date=end_date)
             if not df_index.empty:
                 df_list.append(df_index)
             else:
