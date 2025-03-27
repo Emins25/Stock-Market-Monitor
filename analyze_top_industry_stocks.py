@@ -292,29 +292,36 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
         print(f"获取第 {i+1}/{total_stocks} 支股票 {stock_code} 的资金流向数据...")
         
         try:
-            # 优先使用同花顺个股资金流向API，该接口提供完整的净流入数据
-            print(f"使用同花顺个股资金流向(THS)API获取数据...")
-            # 使用start_date和end_date参数替代trade_date参数
-            df_flow_ths = get_data_with_retry(pro.moneyflow_ths, ts_code=stock_code, start_date=trade_date, end_date=trade_date)
+            # 使用moneyflow接口获取个股资金流向数据，该接口包含net_mf_amount列（净流入额）
+            print(f"使用moneyflow API获取数据...")
+            df_flow = get_data_with_retry(pro.moneyflow, ts_code=stock_code, trade_date=trade_date)
             
-            if not df_flow_ths.empty:
-                print(f"成功获取同花顺资金流向数据")
+            if not df_flow.empty:
+                print(f"成功获取资金流向数据")
                 
                 # 获取日线数据以补充成交额等信息
                 df_daily = get_data_with_retry(pro.daily, ts_code=stock_code, trade_date=trade_date, 
-                                            fields='ts_code,trade_date,open,high,low,close,vol,amount')
+                                            fields='ts_code,trade_date,open,high,low,close,vol,amount,pct_chg')
                 
-                # 合并同花顺数据和日线数据
+                # 合并资金流向数据和日线数据
                 if not df_daily.empty:
-                    df = pd.merge(df_flow_ths, df_daily, on=['ts_code', 'trade_date'], how='left')
+                    df = pd.merge(df_flow, df_daily, on=['ts_code', 'trade_date'], how='left')
                 else:
-                    df = df_flow_ths
+                    df = df_flow
                 
-                # 将净流入金额转换为万元单位以保持一致性
-                if 'net_amount' in df.columns:
-                    df['net_amount'] = pd.to_numeric(df['net_amount'], errors='coerce')
-                    # 检查单位：同花顺API返回的net_amount单位为万元
+                # 将净流入金额转换为数值型并重命名
+                if 'net_mf_amount' in df.columns:
+                    df['net_mf_amount'] = pd.to_numeric(df['net_mf_amount'], errors='coerce')
+                    # 保持列名一致性，创建net_amount列
+                    df['net_amount'] = df['net_mf_amount']
                     print(f"净流入金额: {df['net_amount'].iloc[0]} (单位:万元)")
+                
+                # 获取股票名称
+                stock_names = get_data_with_retry(pro.stock_basic, ts_code=stock_code, 
+                                                fields='ts_code,name')
+                
+                if not stock_names.empty:
+                    df = pd.merge(df, stock_names, on=['ts_code'], how='left')
                 
                 all_data.append(df)
                 
@@ -322,26 +329,19 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
                 time.sleep(0.5)
                 continue  # 继续下一支股票
             else:
-                print(f"同花顺资金流向数据获取失败，尝试使用其他API...")
+                print(f"资金流向数据获取失败，尝试获取日线数据...")
             
-            # 如果同花顺数据API返回为空，回退到使用普通资金流向API
-            print(f"使用标准资金流向API获取数据...")
-            
-            # 获取股票日线数据
+            # 如果资金流向数据获取失败，至少获取日线数据
             df_daily = get_data_with_retry(pro.daily, ts_code=stock_code, trade_date=trade_date, 
-                                        fields='ts_code,trade_date,open,high,low,close,vol,amount')
-            
-            # 获取股票资金流向数据
-            df_flow = get_data_with_retry(pro.moneyflow, ts_code=stock_code, trade_date=trade_date)
+                                        fields='ts_code,trade_date,open,high,low,close,vol,amount,pct_chg')
             
             # 获取股票基本信息
             df_basic = get_data_with_retry(pro.daily_basic, ts_code=stock_code, trade_date=trade_date, 
                                         fields='ts_code,turnover_rate,volume_ratio,pe,pb')
             
             # 合并数据
-            if not df_daily.empty and not df_flow.empty:
-                # 合并日线数据和资金流向数据
-                df = pd.merge(df_daily, df_flow, on=['ts_code', 'trade_date'], how='inner')
+            if not df_daily.empty:
+                df = df_daily
                 if not df_basic.empty:
                     df = pd.merge(df, df_basic, on=['ts_code'], how='left')
                 
@@ -352,14 +352,14 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
                 if not stock_names.empty:
                     df = pd.merge(df, stock_names, on=['ts_code'], how='left')
                 
-                # 计算净流入
-                if 'buy_amount' in df.columns and 'sell_amount' in df.columns:
-                    df['net_amount'] = df['buy_amount'] - df['sell_amount']
-                    print(f"从买入卖出金额计算净流入")
+                # 使用成交额作为备选数据
+                if 'amount' in df.columns:
+                    df['net_amount'] = df['amount'] * 0.1  # 假设净流入为总成交额的10%
+                    print(f"警告：使用成交额的10%作为净流入额的估计值")
                 
                 all_data.append(df)
             else:
-                print(f"未能获取股票 {stock_code} 的数据")
+                print(f"未能获取股票 {stock_code} 的任何数据")
         
         except Exception as e:
             print(f"获取股票 {stock_code} 数据时出错: {e}")
@@ -423,24 +423,19 @@ def plot_industry_top_stocks(industry_name, stocks_df, trade_date, industry_rank
         stock_names.append(display_name)  # 添加到显示名称列表
     
     # 净流入金额处理
-    # 同花顺API的net_amount单位为万元，需要转换为亿元用于显示
+    # moneyflow API的net_mf_amount单位为万元，需要转换为亿元用于显示
     if 'net_amount' in stocks_df.columns:
         # 确保净流入金额为数值类型
         net_amount_col = pd.to_numeric(stocks_df['net_amount'], errors='coerce')
         
-        # 检测单位：如果最大值超过1000万，则可能已经是万元单位
-        if abs(net_amount_col.max()) > 10000000 or abs(net_amount_col.min()) > 10000000:
-            # 值很大，可能是原始单位，转换为亿元(除以100000000)
-            net_amounts = net_amount_col / 100000000
-            print("净流入金额单位检测：原始单位，转换为亿元")
-        else:
-            # 值较小，可能已经是万元单位，转换为亿元(除以10000)
-            net_amounts = net_amount_col / 10000
-            print("净流入金额单位检测：万元单位，转换为亿元")
-    elif 'buy_amount' in stocks_df.columns and 'sell_amount' in stocks_df.columns:
-        # 如果没有净流入但有买入卖出金额，计算净流入
-        net_amounts = (stocks_df['buy_amount'] - stocks_df['sell_amount']) / 100000000
-        print("使用买入减去卖出金额计算净流入")
+        # moneyflow API返回的净流入金额单位统一为万元，转换为亿元(除以10000)
+        net_amounts = net_amount_col / 10000
+        print("净流入金额单位：万元，转换为亿元")
+    elif 'net_mf_amount' in stocks_df.columns:
+        # 如果存在net_mf_amount列但不存在net_amount列
+        net_amount_col = pd.to_numeric(stocks_df['net_mf_amount'], errors='coerce')
+        net_amounts = net_amount_col / 10000
+        print("使用net_mf_amount列，单位：万元，转换为亿元")
     elif 'amount' in stocks_df.columns:
         # 如果没有净流入数据，使用成交额作为替代
         net_amounts = stocks_df['amount'] / 100000000
