@@ -172,6 +172,7 @@ def analyze_market_moneyflow(token=None, date=None, top_n=10, save_fig=True, sho
 def get_stocks_moneyflow(pro, stock_list, trade_date):
     """
     获取多支股票的资金流向数据
+    使用优化方法：一次性获取当天所有股票的资金流向，然后筛选需要的股票
     
     参数:
     pro: tushare pro接口
@@ -181,79 +182,68 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
     返回:
     DataFrame: 包含股票资金流向数据
     """
-    all_data = []
+    print(f"获取 {trade_date} 日所有股票资金流向数据...")
     
-    # 由于API限制，每次请求不超过50支股票
-    batch_size = 50
-    total_batches = (len(stock_list) + batch_size - 1) // batch_size
-    
-    for i in range(0, len(stock_list), batch_size):
-        batch = stock_list[i:i + batch_size]
-        current_batch = i // batch_size + 1
-        print(f"获取第 {current_batch}/{total_batches} 批股票资金流向数据 ({len(batch)} 支)...")
+    try:
+        # 一次性获取当日所有股票的资金流向数据
+        all_stocks_flow = get_data_with_retry(pro.moneyflow, trade_date=trade_date)
         
-        try:
-            # 优先使用同花顺个股资金流向API
-            df_flow_ths = get_data_with_retry(pro.moneyflow_ths, ts_code=','.join(batch), trade_date=trade_date)
-            
-            if not df_flow_ths.empty:
-                # 获取日线数据以补充成交额等信息
-                df_daily = get_data_with_retry(pro.daily, ts_code=','.join(batch), trade_date=trade_date, 
-                                           fields='ts_code,trade_date,open,high,low,close,vol,amount')
-                
-                # 合并同花顺数据和日线数据
-                if not df_daily.empty:
-                    df = pd.merge(df_flow_ths, df_daily, on=['ts_code', 'trade_date'], how='left')
-                else:
-                    df = df_flow_ths
-                
-                all_data.append(df)
-                continue
-            
-            # 如果同花顺数据API返回为空，回退到使用普通资金流向API
-            # 获取股票日线数据
-            df_daily = get_data_with_retry(pro.daily, ts_code=','.join(batch), trade_date=trade_date, 
-                                        fields='ts_code,trade_date,open,high,low,close,vol,amount')
-            
-            # 获取股票资金流向数据
-            df_flow = get_data_with_retry(pro.moneyflow, ts_code=','.join(batch), trade_date=trade_date)
-            
-            # 获取股票基本信息
-            df_basic = get_data_with_retry(pro.daily_basic, ts_code=','.join(batch), trade_date=trade_date, 
-                                        fields='ts_code,turnover_rate,volume_ratio,pe,pb')
-            
-            # 合并数据
-            if not df_daily.empty and not df_flow.empty:
-                # 合并日线数据和资金流向数据
-                df = pd.merge(df_daily, df_flow, on=['ts_code', 'trade_date'], how='inner')
-                if not df_basic.empty:
-                    df = pd.merge(df, df_basic, on=['ts_code'], how='left')
-                
-                # 获取股票名称
-                stock_names = get_data_with_retry(pro.stock_basic, ts_code=','.join(batch), 
-                                                fields='ts_code,name')
-                
-                if not stock_names.empty:
-                    df = pd.merge(df, stock_names, on=['ts_code'], how='left')
-                
-                # 计算净流入
-                if 'buy_amount' in df.columns and 'sell_amount' in df.columns:
-                    df['net_amount'] = df['buy_amount'] - df['sell_amount']
-                
-                all_data.append(df)
+        if all_stocks_flow.empty:
+            print(f"无法获取 {trade_date} 日所有股票的资金流向数据")
+            return pd.DataFrame()
         
-        except Exception as e:
-            print(f"获取股票数据时出错: {e}")
-    
-    # 合并所有批次的数据
-    if all_data:
-        result_df = pd.concat(all_data)
+        print(f"成功获取 {len(all_stocks_flow)} 支股票的资金流向数据")
+        
+        # 如果提供了股票列表，筛选出需要的股票
+        if stock_list:
+            stock_set = set(stock_list)
+            filtered_data = all_stocks_flow[all_stocks_flow['ts_code'].isin(stock_set)]
+            print(f"在列表中找到 {len(filtered_data)}/{len(stock_list)} 支股票的资金流向数据")
+            
+            if len(filtered_data) == 0:
+                print("警告: 未找到任何指定股票的资金流向数据，使用所有股票数据")
+                filtered_data = all_stocks_flow
+        else:
+            # 如果没有提供股票列表，使用所有数据
+            filtered_data = all_stocks_flow
+        
+        # 确保净流入金额列存在
+        if 'net_mf_amount' in filtered_data.columns:
+            filtered_data['net_mf_amount'] = pd.to_numeric(filtered_data['net_mf_amount'], errors='coerce')
+            filtered_data['net_amount'] = filtered_data['net_mf_amount']
+            print("已将net_mf_amount复制为net_amount以保持代码兼容性")
+        elif 'buy_amount' in filtered_data.columns and 'sell_amount' in filtered_data.columns:
+            filtered_data['net_amount'] = filtered_data['buy_amount'] - filtered_data['sell_amount']
+            print("已计算net_amount (buy_amount - sell_amount)")
+        
+        # 获取日线数据以补充成交额等信息
+        if 'amount' not in filtered_data.columns:
+            print("获取日线数据以补充成交额信息...")
+            df_daily = get_data_with_retry(pro.daily, trade_date=trade_date, 
+                                      fields='ts_code,trade_date,open,high,low,close,vol,amount')
+            
+            if not df_daily.empty:
+                filtered_data = pd.merge(filtered_data, df_daily, on=['ts_code', 'trade_date'], how='left')
+                print(f"成功补充了{len(filtered_data[~filtered_data['amount'].isna()])}支股票的成交额信息")
+        
+        # 获取股票名称等基本信息
+        print("获取股票基本信息...")
+        stock_basic_info = get_data_with_retry(pro.stock_basic, 
+                                          fields='ts_code,name,industry,market,area',
+                                          exchange='',
+                                          list_status='L')
+        
+        if not stock_basic_info.empty:
+            filtered_data = pd.merge(filtered_data, stock_basic_info, on=['ts_code'], how='left')
+            print(f"已关联{len(filtered_data[~filtered_data['name'].isna()])}支股票的基本信息(名称、行业等)")
         
         # 打印数据列名，帮助调试
-        print(f"数据列名: {result_df.columns.tolist()}")
+        print(f"数据列名: {filtered_data.columns.tolist()}")
         
-        return result_df
-    else:
+        return filtered_data
+        
+    except Exception as e:
+        print(f"获取股票资金流向数据时出错: {e}")
         return pd.DataFrame()
 
 def analyze_net_inflow(df_flow, top_n=10, trade_date=None, save_fig=True, show_fig=True):

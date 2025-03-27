@@ -142,6 +142,7 @@ def get_stock_list(pro):
 def get_stocks_moneyflow(pro, stock_list, trade_date):
     """
     获取多支股票的资金流向数据
+    使用优化方法：一次性获取当天所有股票的资金流向，然后筛选需要的股票
     
     参数:
     pro: tushare pro接口
@@ -151,42 +152,54 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
     返回:
     DataFrame: 包含股票资金流向数据
     """
-    print(f"获取{len(stock_list)}支股票的资金流向数据...")
+    print(f"获取 {trade_date} 日所有股票资金流向数据...")
     
-    all_data = []
-    
-    # 由于API限制，每次请求不超过50支股票
-    batch_size = 50
-    total_batches = (len(stock_list) + batch_size - 1) // batch_size
-    
-    for i in range(0, len(stock_list), batch_size):
-        batch = stock_list[i:i + batch_size]
-        current_batch = i // batch_size + 1
-        print(f"获取第 {current_batch}/{total_batches} 批股票资金流向数据 ({len(batch)} 支)...")
+    try:
+        # 一次性获取当日所有股票的资金流向数据
+        all_stocks_flow = get_data_with_retry(pro.moneyflow, trade_date=trade_date)
         
-        try:
-            # 优先使用同花顺个股资金流向API
-            df_flow_ths = get_data_with_retry(pro.moneyflow_ths, ts_code=','.join(batch), trade_date=trade_date)
-            
-            if not df_flow_ths.empty:
-                all_data.append(df_flow_ths)
-                continue
-            
-            # 如果同花顺数据API返回为空，回退到使用普通资金流向API
-            df_flow = get_data_with_retry(pro.moneyflow, ts_code=','.join(batch), trade_date=trade_date)
-            
-            if not df_flow.empty:
-                all_data.append(df_flow)
+        if all_stocks_flow.empty:
+            print(f"无法获取 {trade_date} 日所有股票的资金流向数据")
+            return pd.DataFrame()
         
-        except Exception as e:
-            print(f"获取股票资金流向数据时出错: {e}")
-    
-    # 合并所有批次的数据
-    if all_data:
-        result_df = pd.concat(all_data)
-        print(f"成功获取 {len(result_df)} 支股票的资金流向数据")
-        return result_df
-    else:
+        print(f"成功获取 {len(all_stocks_flow)} 支股票的资金流向数据")
+        
+        # 如果提供了股票列表，筛选出需要的股票
+        if stock_list:
+            stock_set = set(stock_list)
+            filtered_data = all_stocks_flow[all_stocks_flow['ts_code'].isin(stock_set)]
+            print(f"在列表中找到 {len(filtered_data)}/{len(stock_list)} 支股票的资金流向数据")
+            
+            if len(filtered_data) == 0:
+                print("警告: 未找到任何指定股票的资金流向数据，使用所有股票数据")
+                filtered_data = all_stocks_flow
+        else:
+            # 如果没有提供股票列表，使用所有数据
+            filtered_data = all_stocks_flow
+        
+        # 确保净流入金额列存在
+        if 'net_mf_amount' in filtered_data.columns:
+            filtered_data['net_mf_amount'] = pd.to_numeric(filtered_data['net_mf_amount'], errors='coerce')
+            filtered_data['net_amount'] = filtered_data['net_mf_amount']
+            print("已将net_mf_amount复制为net_amount以保持代码兼容性")
+        elif 'buy_amount' in filtered_data.columns and 'sell_amount' in filtered_data.columns:
+            filtered_data['net_amount'] = filtered_data['buy_amount'] - filtered_data['sell_amount']
+            print("已计算net_amount (buy_amount - sell_amount)")
+        
+        # 获取股票名称等基本信息
+        stock_basic_info = get_data_with_retry(pro.stock_basic, 
+                                          fields='ts_code,name,industry,market,area',
+                                          exchange='',
+                                          list_status='L')
+        
+        if not stock_basic_info.empty:
+            filtered_data = pd.merge(filtered_data, stock_basic_info, on=['ts_code'], how='left')
+            print(f"已关联{len(filtered_data[~filtered_data['name'].isna()])}支股票的基本信息(名称、行业等)")
+        
+        return filtered_data
+        
+    except Exception as e:
+        print(f"获取股票资金流向数据时出错: {e}")
         return pd.DataFrame()
 
 def calculate_concentration_index(flow_df, top_percent=10):
