@@ -15,7 +15,6 @@
    - 按净流入金额排序后，取前十名绘制柱状图
 4. 全市场个股资金净流入分析：分析全市场资金净流入最高的股票
    - 拉取全市场个股的当日资金净流入数据，排序后取前十名，柱状图展示
-   - 计算全市场每个股票的资金流入率=(资金净流入/当日成交额)*100%，排序后取最高的前十名，柱状图展示
 5. 量价背离指数：筛选当日涨幅前50但资金净流出的个股占比，反应市场虚涨风险
    - 计算过去20个交易日每天的量价背离指数，折线图展示
    - 占比大于30%警示回调可能性
@@ -125,13 +124,11 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     # 3. 分析全市场个股资金净流入情况
     print("\n[3/6] 正在分析全市场个股资金净流入情况...")
-    # 通过以下步骤实现：
-    # - 拉取全市场个股的当日资金净流入数据
-    # - 分别按净流入金额和流入率排序，取前10名
-    # - 生成两张柱状图
-    net_inflow_top, inflow_rate_top = analyze_market_moneyflow(token=token, date=end_date, 
-                                                            top_n=top_stock_count, 
-                                                            save_fig=True, show_fig=False)
+    # 只获取资金净流入排行，不再获取资金净流入率排行
+    net_inflow_top, _ = analyze_market_moneyflow(token=token, date=end_date, 
+                                            top_n=top_stock_count, 
+                                            save_fig=True, show_fig=False,
+                                            only_net_inflow=True)  # 设置参数只获取净流入排行
     
     print(f"全市场个股资金净流入分析完成")
     

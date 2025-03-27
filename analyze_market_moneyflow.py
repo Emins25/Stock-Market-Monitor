@@ -114,7 +114,7 @@ def get_latest_trade_date(pro, days_back=5):
     # 如果获取失败，返回当前日期
     return end_date
 
-def analyze_market_moneyflow(token=None, date=None, top_n=10, save_fig=True, show_fig=True):
+def analyze_market_moneyflow(token=None, date=None, top_n=10, save_fig=True, show_fig=True, only_net_inflow=False):
     """
     分析全市场个股资金净流入情况
     
@@ -124,6 +124,7 @@ def analyze_market_moneyflow(token=None, date=None, top_n=10, save_fig=True, sho
     top_n: 要显示的股票数量，默认为10
     save_fig: 是否保存图片，默认为True
     show_fig: 是否显示图表，默认为True
+    only_net_inflow: 是否只返回净流入排行，不返回净流入率排行，默认为False
     
     返回:
     tuple: 包含净流入排行和流入率排行的DataFrame
@@ -164,8 +165,12 @@ def analyze_market_moneyflow(token=None, date=None, top_n=10, save_fig=True, sho
     # 1. 分析资金净流入最高的股票
     net_inflow_top = analyze_net_inflow(df_flow, top_n, date, save_fig, show_fig)
     
-    # 2. 分析资金流入率最高的股票
-    inflow_rate_top = analyze_inflow_rate(df_flow, top_n, date, save_fig, show_fig)
+    # 2. 分析资金流入率最高的股票 (如果参数为True则跳过)
+    if only_net_inflow:
+        print("只返回净流入排行，跳过净流入率排行分析")
+        inflow_rate_top = pd.DataFrame()
+    else:
+        inflow_rate_top = analyze_inflow_rate(df_flow, top_n, date, save_fig, show_fig)
     
     return net_inflow_top, inflow_rate_top
 

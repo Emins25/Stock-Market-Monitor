@@ -31,14 +31,15 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
         #    return 3
         elif 'market_net_inflow' in filename:
             return 3
-        elif 'market_inflow_rate' in filename:
-            return 4
+        # 移除对market_inflow_rate的处理
+        # elif 'market_inflow_rate' in filename:
+        #    return 4
         elif 'price_volume_divergence' in filename:
-            return 5
+            return 4
         elif 'capital_concentration' in filename:
-            return 6
+            return 5
         elif 'up_down_ratio' in filename:
-            return 7
+            return 6
         else:
             return 100  # 其他文件放到最后
     
@@ -192,7 +193,7 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
             section_title = Paragraph(f"{section_num}. 全市场个股资金净流入", styles['ChineseSubtitle'])
             content.append(section_title)
             
-            description = Paragraph("本部分分析了全市场资金净流入最高的股票，包括按净流入金额和流入率排名的两个维度，"
+            description = Paragraph("本部分分析了全市场资金净流入最高的股票，"
                                   "帮助发现市场大单关注的热点个股。", styles['ChineseBody'])
             content.append(description)
             
@@ -200,12 +201,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
             content.append(img)
             content.append(Spacer(1, 0.5*cm))
             
-        elif 'market_inflow_rate' in img_file:
-            # 流入率图片
-            img = Image(img_file, width=16*cm, height=10*cm)
-            content.append(img)
-            content.append(Spacer(1, 0.5*cm))
-            
+            # 移除资金净流入率图片的处理
+            # 直接增加section_num
             section_num += 1
             content.append(Paragraph("", styles['ChineseBody']))  # 添加分页符
             
