@@ -131,7 +131,8 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     # - 计算过去N个交易日的量价背离指数
     # - 绘制折线图展示结果
     df_divergence = analyze_price_volume_divergence(token=token, days=days, 
-                                                 top_n=50, save_fig=True, show_fig=False)
+                                                 top_n=50, save_fig=True, show_fig=False,
+                                                 date=end_date)
     
     print(f"量价背离指数分析完成")
     
@@ -141,7 +142,8 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     # - 计算过去N个交易日的资金集中度指标
     # - 绘制折线图展示结果
     df_concentration = analyze_capital_concentration(token=token, days=days, 
-                                                  top_percent=10, save_fig=True, show_fig=False)
+                                                  top_percent=10, save_fig=True, show_fig=False,
+                                                  date=end_date)
     
     print(f"资金集中度指标分析完成")
     

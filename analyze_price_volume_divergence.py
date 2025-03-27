@@ -246,7 +246,7 @@ def calculate_divergence_index(top_gainers_df, flow_df):
     else:
         return None
 
-def analyze_price_volume_divergence(token=None, days=20, top_n=50, save_fig=True, show_fig=True):
+def analyze_price_volume_divergence(token=None, days=20, top_n=50, save_fig=True, show_fig=True, date=None):
     """
     计算过去N个交易日的量价背离指数
     
@@ -256,6 +256,7 @@ def analyze_price_volume_divergence(token=None, days=20, top_n=50, save_fig=True
     top_n: 每天分析涨幅前多少的股票，默认为50
     save_fig: 是否保存图片，默认为True
     show_fig: 是否显示图表，默认为True
+    date: 结束日期，格式为'YYYYMMDD'，若为None则使用当前日期
     
     返回:
     DataFrame: 包含每日量价背离指数的DataFrame
@@ -268,8 +269,14 @@ def analyze_price_volume_divergence(token=None, days=20, top_n=50, save_fig=True
     pro = ts.pro_api(token)
     
     # 获取当前日期和N天前的日期
-    end_date = datetime.now().strftime('%Y%m%d')
-    start_date = (datetime.now() - timedelta(days=days*2)).strftime('%Y%m%d')  # 多取一些交易日，确保有足够的数据
+    if date is None:
+        end_date = datetime.now().strftime('%Y%m%d')
+    else:
+        end_date = date
+        
+    print(f"分析结束日期: {end_date}")
+    
+    start_date = (datetime.strptime(end_date, '%Y%m%d') - timedelta(days=days*2)).strftime('%Y%m%d')  # 多取一些交易日，确保有足够的数据
     
     # 获取交易日期列表
     trade_dates = get_trade_dates(pro, start_date, end_date)
