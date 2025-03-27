@@ -1,1 +1,18 @@
- 
+# Python缓存文件
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 临时文件
+*.swp
+*.bak
+*.tmp
+*.log
+
+# 生成的图片和PDF
+*.png
+*.pdf
+
+# 系统文件
+.DS_Store
+Thumbs.db 

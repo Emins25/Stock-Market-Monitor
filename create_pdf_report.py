@@ -23,6 +23,10 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     industry_moneyflow_images = glob.glob('industry_moneyflow_top_bottom_*.png')  # 行业资金流向图片
     industry_stocks_images = glob.glob('industry_*_stocks_*.png')  # 个股资金流向图片
     index_performance_images = glob.glob('index_performance_*.png')  # 指数表现图片
+    market_moneyflow_images = glob.glob('market_net_inflow_top_*.png') + glob.glob('market_inflow_rate_top_*.png')  # 市场资金流向图片
+    divergence_images = glob.glob('price_volume_divergence_index_*.png')  # 量价背离指数图片
+    concentration_images = glob.glob('capital_concentration_index_*.png')  # 资金集中度指标图片
+    
     # 移除已经包含在industry_moneyflow_images中的图片
     industry_stocks_images = [img for img in industry_stocks_images if img not in industry_moneyflow_images]
     
@@ -39,9 +43,13 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     industry_moneyflow_images.sort(key=extract_date, reverse=True)
     industry_stocks_images.sort(key=extract_date, reverse=True)
     index_performance_images.sort(key=extract_date, reverse=True)
+    market_moneyflow_images.sort(key=extract_date, reverse=True)
+    divergence_images.sort(key=extract_date, reverse=True)
+    concentration_images.sort(key=extract_date, reverse=True)
     
     # 检查是否找到图片
-    all_images = index_performance_images + industry_moneyflow_images + industry_stocks_images
+    all_images = (index_performance_images + industry_moneyflow_images + industry_stocks_images + 
+                 market_moneyflow_images + divergence_images + concentration_images)
     if not all_images:
         print("未找到任何图片文件，无法创建PDF报告")
         return
@@ -50,6 +58,9 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     print(f"  - 指数表现图片: {len(index_performance_images)} 个")
     print(f"  - 行业资金流向图片: {len(industry_moneyflow_images)} 个")
     print(f"  - 个股资金流向图片: {len(industry_stocks_images)} 个")
+    print(f"  - 市场资金流向图片: {len(market_moneyflow_images)} 个")
+    print(f"  - 量价背离指数图片: {len(divergence_images)} 个")
+    print(f"  - 资金集中度指标图片: {len(concentration_images)} 个")
     
     for img in all_images:
         print(f"  - {img}")
@@ -86,7 +97,7 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     
     # 添加副标题
     c.setFont(cn_font, 24)
-    subtitle = "行业与个股资金流向分析报告"
+    subtitle = "市场监测系统分析报告"
     subtitle_width = stringWidth(subtitle, cn_font, 24)
     c.drawString((width - subtitle_width) / 2, height - 200, subtitle)
     
@@ -201,20 +212,17 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
         current_y -= line_height * 1.5
         
         c.setFont(cn_font, 12)
-        start_page = len(index_performance_images) + len(industry_moneyflow_images) + 3  # 封面(1) + 目录(1) + 指数页数 + 行业页数
+        start_page = len(index_performance_images) + len(industry_moneyflow_images) + 3  # 封面(1) + 目录(1) + 前面的图片页数
         
         for i, img_path in enumerate(industry_stocks_images):
-            # 尝试从文件名中提取行业名称
-            filename_parts = os.path.basename(img_path).split('_')
-            industry_name = "未知行业"
-            if len(filename_parts) > 2:
-                industry_name = filename_parts[1]
-            
             img_date = extract_date(img_path)
             if len(img_date) == 8:
                 formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
             else:
                 formatted_date = "未知日期"
+            
+            # 提取行业名称
+            industry_name = img_path.split('_')[1] if len(img_path.split('_')) > 1 else "未知行业"
             
             # 绘制目录项
             index_text = f"3.{i+1} {industry_name}行业个股资金流向 ({formatted_date})"
@@ -239,157 +247,259 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
                 c.setFont(cn_font, 12)
                 current_y = height - 100
     
+    # 添加市场资金流向部分到目录
+    if market_moneyflow_images:
+        c.setFont(cn_font, 16)
+        c.drawString(50, current_y, "四、市场资金流向")
+        current_y -= line_height * 1.5
+        
+        c.setFont(cn_font, 12)
+        start_page = (len(index_performance_images) + len(industry_moneyflow_images) + 
+                     len(industry_stocks_images) + 3)  # 封面(1) + 目录(1) + 前面的图片页数
+        
+        for i, img_path in enumerate(market_moneyflow_images):
+            img_date = extract_date(img_path)
+            if len(img_date) == 8:
+                formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+            else:
+                formatted_date = "未知日期"
+            
+            # 判断是净流入榜还是流入率榜
+            if 'rate' in img_path:
+                title = "个股资金流入率排行"
+            else:
+                title = "个股资金净流入排行"
+            
+            # 绘制目录项
+            index_text = f"4.{i+1} {title} ({formatted_date})"
+            c.drawString(70, current_y, index_text)
+            
+            # 绘制页码和点线
+            page_num = start_page + i
+            c.drawString(width - 100, current_y, str(page_num))
+            
+            # 在文本和页码之间添加点线
+            c.setDash([1, 2], 0)
+            c.line(70 + stringWidth(index_text, cn_font, 12) + 10, 
+                   current_y + 4, width - 110, current_y + 4)
+            
+            current_y -= line_height
+            
+            # 如果页面空间不足，创建新页
+            if current_y < 50:
+                c.showPage()
+                c.setFont(cn_font, 24)
+                c.drawString(30, height - 50, "目录(续)")
+                c.setFont(cn_font, 12)
+                current_y = height - 100
+    
+    # 添加量价背离指数部分到目录
+    if divergence_images:
+        c.setFont(cn_font, 16)
+        c.drawString(50, current_y, "五、量价背离指数")
+        current_y -= line_height * 1.5
+        
+        c.setFont(cn_font, 12)
+        start_page = (len(index_performance_images) + len(industry_moneyflow_images) + 
+                     len(industry_stocks_images) + len(market_moneyflow_images) + 3)
+        
+        for i, img_path in enumerate(divergence_images):
+            img_date = extract_date(img_path)
+            if len(img_date) == 8:
+                formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+            else:
+                formatted_date = "未知日期"
+            
+            # 绘制目录项
+            index_text = f"5.{i+1} 量价背离指数分析 ({formatted_date})"
+            c.drawString(70, current_y, index_text)
+            
+            # 绘制页码和点线
+            page_num = start_page + i
+            c.drawString(width - 100, current_y, str(page_num))
+            
+            # 在文本和页码之间添加点线
+            c.setDash([1, 2], 0)
+            c.line(70 + stringWidth(index_text, cn_font, 12) + 10, 
+                   current_y + 4, width - 110, current_y + 4)
+            
+            current_y -= line_height
+            
+            # 如果页面空间不足，创建新页
+            if current_y < 50:
+                c.showPage()
+                c.setFont(cn_font, 24)
+                c.drawString(30, height - 50, "目录(续)")
+                c.setFont(cn_font, 12)
+                current_y = height - 100
+    
+    # 添加资金集中度指标部分到目录
+    if concentration_images:
+        c.setFont(cn_font, 16)
+        c.drawString(50, current_y, "六、资金集中度指标")
+        current_y -= line_height * 1.5
+        
+        c.setFont(cn_font, 12)
+        start_page = (len(index_performance_images) + len(industry_moneyflow_images) + 
+                     len(industry_stocks_images) + len(market_moneyflow_images) + 
+                     len(divergence_images) + 3)
+        
+        for i, img_path in enumerate(concentration_images):
+            img_date = extract_date(img_path)
+            if len(img_date) == 8:
+                formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+            else:
+                formatted_date = "未知日期"
+            
+            # 绘制目录项
+            index_text = f"6.{i+1} 资金集中度指标分析 ({formatted_date})"
+            c.drawString(70, current_y, index_text)
+            
+            # 绘制页码和点线
+            page_num = start_page + i
+            c.drawString(width - 100, current_y, str(page_num))
+            
+            # 在文本和页码之间添加点线
+            c.setDash([1, 2], 0)
+            c.line(70 + stringWidth(index_text, cn_font, 12) + 10, 
+                   current_y + 4, width - 110, current_y + 4)
+            
+            current_y -= line_height
+            
+            # 如果页面空间不足，创建新页
+            if current_y < 50:
+                c.showPage()
+                c.setFont(cn_font, 24)
+                c.drawString(30, height - 50, "目录(续)")
+                c.setFont(cn_font, 12)
+                current_y = height - 100
+    
     c.showPage()  # 结束目录页
     
-    # 添加指数表现图片
-    for i, img_path in enumerate(index_performance_images):
+    # 函数：添加图片到PDF页面
+    def add_image_to_page(image_path, title=None):
         try:
-            # 提取日期
-            img_date = extract_date(img_path)
-            if len(img_date) == 8:
-                formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
-            else:
-                formatted_date = "未知日期"
+            # 读取图片
+            img = ImageReader(image_path)
             
-            # 添加页眉
-            c.setFont(cn_font, 16)
-            c.setFillColor(HexColor('#000000'))
-            header = f"市场指数表现 ({formatted_date})"
-            c.drawString(30, height - 30, header)
-            
-            # 加载图片
-            img = ImageReader(img_path)
+            # 获取图片宽高比
             img_width, img_height = img.getSize()
+            aspect = img_width / float(img_height)
             
-            # 计算图片显示尺寸，保持比例
-            display_width = width - 60  # 左右各留30的边距
-            scale = display_width / img_width
-            display_height = img_height * scale
+            # 计算图片在页面上的尺寸和位置
+            max_width = width - 50
+            max_height = height - 100
             
-            # 确保图片高度不超过页面
-            if display_height > height - 100:  # 上下各留50的边距
-                display_height = height - 100
-                scale = display_height / img_height
-                display_width = img_width * scale
+            if aspect > max_width / max_height:  # 宽度受限
+                display_width = max_width
+                display_height = display_width / aspect
+            else:  # 高度受限
+                display_height = max_height
+                display_width = display_height * aspect
             
-            # 在页面中央绘制图片
-            x = (width - display_width) / 2
-            y = (height - display_height) / 2
-            c.drawImage(img, x, y, width=display_width, height=display_height)
+            # 添加标题
+            if title:
+                c.setFont(cn_font, 14)
+                title_width = stringWidth(title, cn_font, 14)
+                c.drawString((width - title_width) / 2, height - 30, title)
+            
+            # 计算图片位置（居中）
+            x_pos = (width - display_width) / 2
+            y_pos = (height - display_height) / 2
+            
+            # 绘制图片
+            c.drawImage(img, x_pos, y_pos, width=display_width, height=display_height)
             
             # 添加页脚
-            c.setFont(cn_font, 10)
-            c.drawString(30, 30, f"第 {i+3} 页")  # 封面(1) + 目录(1) + 当前页码
-            c.drawString(width - 150, 30, "Stock Market Monitor")
+            c.setFont(cn_font, 8)
+            c.drawString(30, 20, f"数据来源: 同花顺 | 生成时间: {datetime.now().strftime('%Y-%m-%d')}")
             
-            c.showPage()  # 结束当前页面
+            c.showPage()
+            
+            return True
         except Exception as e:
-            print(f"处理图片 {img_path} 时出错: {e}")
+            print(f"添加图片 {image_path} 时出错: {e}")
+            return False
+    
+    # 添加指数表现图片
+    for img_path in index_performance_images:
+        img_date = extract_date(img_path)
+        if len(img_date) == 8:
+            formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+        else:
+            formatted_date = "未知日期"
+        
+        title = f"市场指数表现 ({formatted_date})"
+        add_image_to_page(img_path, title)
     
     # 添加行业资金流向图片
-    start_page = len(index_performance_images) + 3  # 封面(1) + 目录(1) + 指数页数
-    for i, img_path in enumerate(industry_moneyflow_images):
-        try:
-            # 提取日期
-            img_date = extract_date(img_path)
-            if len(img_date) == 8:
-                formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
-            else:
-                formatted_date = "未知日期"
-            
-            # 添加页眉
-            c.setFont(cn_font, 16)
-            c.setFillColor(HexColor('#000000'))
-            header = f"行业资金流向分析 ({formatted_date})"
-            c.drawString(30, height - 30, header)
-            
-            # 加载图片
-            img = ImageReader(img_path)
-            img_width, img_height = img.getSize()
-            
-            # 计算图片显示尺寸，保持比例
-            display_width = width - 60  # 左右各留30的边距
-            scale = display_width / img_width
-            display_height = img_height * scale
-            
-            # 确保图片高度不超过页面
-            if display_height > height - 100:  # 上下各留50的边距
-                display_height = height - 100
-                scale = display_height / img_height
-                display_width = img_width * scale
-            
-            # 在页面中央绘制图片
-            x = (width - display_width) / 2
-            y = (height - display_height) / 2
-            c.drawImage(img, x, y, width=display_width, height=display_height)
-            
-            # 添加页脚
-            c.setFont(cn_font, 10)
-            page_num = start_page + i
-            c.drawString(30, 30, f"第 {page_num} 页")
-            c.drawString(width - 150, 30, "Stock Market Monitor")
-            
-            c.showPage()  # 结束当前页面
-        except Exception as e:
-            print(f"处理图片 {img_path} 时出错: {e}")
+    for img_path in industry_moneyflow_images:
+        img_date = extract_date(img_path)
+        if len(img_date) == 8:
+            formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+        else:
+            formatted_date = "未知日期"
+        
+        title = f"行业资金流向分析 ({formatted_date})"
+        add_image_to_page(img_path, title)
     
     # 添加个股资金流向图片
-    start_page = len(index_performance_images) + len(industry_moneyflow_images) + 3  # 封面(1) + 目录(1) + 指数页数 + 行业页数
-    for i, img_path in enumerate(industry_stocks_images):
-        try:
-            # 提取日期和行业名称
-            img_date = extract_date(img_path)
-            if len(img_date) == 8:
-                formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
-            else:
-                formatted_date = "未知日期"
-            
-            # 尝试从文件名中提取行业名称
-            filename_parts = os.path.basename(img_path).split('_')
-            industry_name = "未知行业"
-            if len(filename_parts) > 2:
-                industry_name = filename_parts[1]
-            
-            # 添加页眉
-            c.setFont(cn_font, 16)
-            c.setFillColor(HexColor('#000000'))
-            header = f"{industry_name}行业个股资金流向 ({formatted_date})"
-            c.drawString(30, height - 30, header)
-            
-            # 加载图片
-            img = ImageReader(img_path)
-            img_width, img_height = img.getSize()
-            
-            # 计算图片显示尺寸，保持比例
-            display_width = width - 60  # 左右各留30的边距
-            scale = display_width / img_width
-            display_height = img_height * scale
-            
-            # 确保图片高度不超过页面
-            if display_height > height - 100:  # 上下各留50的边距
-                display_height = height - 100
-                scale = display_height / img_height
-                display_width = img_width * scale
-            
-            # 在页面中央绘制图片
-            x = (width - display_width) / 2
-            y = (height - display_height) / 2
-            c.drawImage(img, x, y, width=display_width, height=display_height)
-            
-            # 添加页脚
-            c.setFont(cn_font, 10)
-            page_num = start_page + i
-            c.drawString(30, 30, f"第 {page_num} 页")
-            c.drawString(width - 150, 30, "Stock Market Monitor")
-            
-            c.showPage()  # 结束当前页面
-        except Exception as e:
-            print(f"处理图片 {img_path} 时出错: {e}")
+    for img_path in industry_stocks_images:
+        img_date = extract_date(img_path)
+        if len(img_date) == 8:
+            formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+        else:
+            formatted_date = "未知日期"
+        
+        # 提取行业名称
+        industry_name = img_path.split('_')[1] if len(img_path.split('_')) > 1 else "未知行业"
+        
+        title = f"{industry_name}行业个股资金流向 ({formatted_date})"
+        add_image_to_page(img_path, title)
+    
+    # 添加市场资金流向图片
+    for img_path in market_moneyflow_images:
+        img_date = extract_date(img_path)
+        if len(img_date) == 8:
+            formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+        else:
+            formatted_date = "未知日期"
+        
+        # 判断是净流入榜还是流入率榜
+        if 'rate' in img_path:
+            title = f"个股资金流入率排行 ({formatted_date})"
+        else:
+            title = f"个股资金净流入排行 ({formatted_date})"
+        
+        add_image_to_page(img_path, title)
+    
+    # 添加量价背离指数图片
+    for img_path in divergence_images:
+        img_date = extract_date(img_path)
+        if len(img_date) == 8:
+            formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+        else:
+            formatted_date = "未知日期"
+        
+        title = f"量价背离指数分析 ({formatted_date})"
+        add_image_to_page(img_path, title)
+    
+    # 添加资金集中度指标图片
+    for img_path in concentration_images:
+        img_date = extract_date(img_path)
+        if len(img_date) == 8:
+            formatted_date = f"{img_date[:4]}-{img_date[4:6]}-{img_date[6:]}"
+        else:
+            formatted_date = "未知日期"
+        
+        title = f"资金集中度指标分析 ({formatted_date})"
+        add_image_to_page(img_path, title)
     
     # 保存PDF文件
     c.save()
-    print(f"PDF报告已成功创建: {output_filename}")
-    print(f"报告包含 {len(all_images)} 张图片，共 {page_count} 页")
+    print(f"PDF报告已成功生成: {output_filename}")
+    
+    return output_filename
 
 if __name__ == "__main__":
     create_pdf_report() 

@@ -16,7 +16,13 @@
 4. 全市场个股资金净流入分析：分析全市场资金净流入最高的股票
    - 拉取全市场个股的当日资金净流入数据，排序后取前十名，柱状图展示
    - 计算全市场每个股票的资金流入率=(资金净流入/当日成交额)*100%，排序后取最高的前十名，柱状图展示
-5. 自动生成PDF报告：整合所有分析结果成一份完整报告
+5. 量价背离指数：筛选当日涨幅前50但资金净流出的个股占比，反应市场虚涨风险
+   - 计算过去20个交易日每天的量价背离指数，折线图展示
+   - 占比大于30%警示回调可能性
+6. 资金集中度指标：前10%个股的资金净流入占全市场比例
+   - 计算过去20个交易日的数据，折线图展示
+   - 集中度越高说明市场情绪越分化
+7. 自动生成PDF报告：整合所有分析结果成一份完整报告
 """
 
 import os
@@ -28,9 +34,11 @@ from plot_index_performance import plot_index_performance
 from plot_industry_moneyflow import plot_industry_moneyflow
 from analyze_top_industry_stocks import get_top_stocks_by_industry
 from analyze_market_moneyflow import analyze_market_moneyflow
+from analyze_price_volume_divergence import analyze_price_volume_divergence
+from analyze_capital_concentration import analyze_capital_concentration
 from create_pdf_report import create_pdf_report
 
-def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, token=None):
+def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, token=None, days=20):
     """
     生成完整的市场监测报告
     
@@ -39,6 +47,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     top_industry_count: 要分析的行业数量，默认为3
     top_stock_count: 每个行业要显示的股票数量，默认为10
     token: tushare API token，若为None则使用默认token
+    days: 要分析的历史天数，用于量价背离指数和资金集中度指标，默认为20
     
     返回:
     str: 生成的PDF报告路径
@@ -56,6 +65,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"开始生成报告，分析日期: {date if date else '最近交易日'}")
     print(f"分析热点行业数量: {top_industry_count}")
     print(f"每个行业分析热门股票数量: {top_stock_count}")
+    print(f"历史分析天数: {days}天")
     
     start_time = datetime.now()
     print(f"\n开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -67,7 +77,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
         end_date = date
     
     # 1. 生成大盘指数表现图
-    print("\n[1/4] 正在生成市场指数表现图...")
+    print("\n[1/6] 正在生成市场指数表现图...")
     
     # 定义指数名称字典
     index_names = {
@@ -85,12 +95,12 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"市场指数表现图生成完成")
     
     # 2. 生成行业资金流向图
-    print("\n[2/4] 正在生成行业资金流向图...")
+    print("\n[2/6] 正在生成行业资金流向图...")
     df_industry = plot_industry_moneyflow(token=token, date=end_date, top_n=10, save_fig=True, show_fig=False)
     print(f"行业资金流向图生成完成")
     
     # 3. 生成热点行业个股分析图
-    print("\n[3/4] 正在分析热点行业个股资金流向...")
+    print("\n[3/6] 正在分析热点行业个股资金流向...")
     # 通过以下步骤实现：
     # - 获取行业资金流向数据，获取净流入最高的行业及其ts_code
     # - 使用指数成分和权重API获取行业成分股列表
@@ -104,7 +114,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"热点行业个股分析完成")
     
     # 4. 分析全市场个股资金净流入情况
-    print("\n[4/4] 正在分析全市场个股资金净流入情况...")
+    print("\n[4/6] 正在分析全市场个股资金净流入情况...")
     # 通过以下步骤实现：
     # - 拉取全市场个股的当日资金净流入数据
     # - 分别按净流入金额和流入率排序，取前10名
@@ -115,7 +125,27 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"全市场个股资金净流入分析完成")
     
-    # 5. 生成PDF报告
+    # 5. 分析量价背离指数
+    print("\n[5/6] 正在分析量价背离指数...")
+    # 通过以下步骤实现：
+    # - 计算过去N个交易日的量价背离指数
+    # - 绘制折线图展示结果
+    df_divergence = analyze_price_volume_divergence(token=token, days=days, 
+                                                 top_n=50, save_fig=True, show_fig=False)
+    
+    print(f"量价背离指数分析完成")
+    
+    # 6. 分析资金集中度指标
+    print("\n[6/6] 正在分析资金集中度指标...")
+    # 通过以下步骤实现：
+    # - 计算过去N个交易日的资金集中度指标
+    # - 绘制折线图展示结果
+    df_concentration = analyze_capital_concentration(token=token, days=days, 
+                                                  top_percent=10, save_fig=True, show_fig=False)
+    
+    print(f"资金集中度指标分析完成")
+    
+    # 7. 生成PDF报告
     print("\n正在生成PDF报告...")
     report_filename = f"Stock_Market_Monitor_{end_date}.pdf"
     create_pdf_report(output_filename=report_filename)
@@ -139,6 +169,7 @@ def main():
     parser.add_argument('--date', '-d', type=str, help='分析日期，格式为YYYYMMDD，默认为最近交易日')
     parser.add_argument('--industries', '-i', type=int, default=3, help='分析热点行业数量，默认为3')
     parser.add_argument('--stocks', '-s', type=int, default=10, help='每个行业分析热门股票数量，默认为10')
+    parser.add_argument('--days', '-n', type=int, default=20, help='历史分析天数，用于量价背离指数和资金集中度指标，默认为20')
     parser.add_argument('--token', '-t', type=str, help='tushare API token')
     
     args = parser.parse_args()
@@ -147,7 +178,8 @@ def main():
     generate_market_report(date=args.date, 
                          top_industry_count=args.industries, 
                          top_stock_count=args.stocks,
-                         token=args.token)
+                         token=args.token,
+                         days=args.days)
 
 if __name__ == "__main__":
     main() 
