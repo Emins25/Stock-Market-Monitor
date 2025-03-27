@@ -286,7 +286,8 @@ def get_industry_stocks(pro, industry_code, trade_date=None, retries=3, retry_de
 
 def get_stocks_moneyflow(pro, stock_list, trade_date):
     """
-    获取多支股票的资金流向数据，一次请求一支股票
+    获取指定股票列表的资金流向数据
+    使用优化方法：一次性获取当天所有股票的资金流向，然后筛选需要的股票
     
     参数:
     pro: tushare pro接口
@@ -296,105 +297,50 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
     返回:
     DataFrame: 包含股票资金流向数据
     """
-    all_data = []
-    total_stocks = len(stock_list)
+    print(f"获取 {trade_date} 日所有股票资金流向数据...")
     
-    # 改为逐个获取每支股票的数据，以提高成功率
-    for i, stock_code in enumerate(stock_list):
-        print(f"获取第 {i+1}/{total_stocks} 支股票 {stock_code} 的资金流向数据...")
+    try:
+        # 一次性获取当日所有股票的资金流向数据
+        all_stocks_flow = get_data_with_retry(pro.moneyflow, trade_date=trade_date)
         
-        try:
-            # 使用moneyflow接口获取个股资金流向数据，该接口包含net_mf_amount列（净流入额）
-            print(f"使用moneyflow API获取数据...")
-            df_flow = get_data_with_retry(pro.moneyflow, ts_code=stock_code, trade_date=trade_date)
-            
-            if not df_flow.empty:
-                print(f"成功获取资金流向数据")
-                
-                # 获取日线数据以补充成交额等信息
-                df_daily = get_data_with_retry(pro.daily, ts_code=stock_code, trade_date=trade_date, 
-                                            fields='ts_code,trade_date,open,high,low,close,vol,amount,pct_chg')
-                
-                # 合并资金流向数据和日线数据
-                if not df_daily.empty:
-                    df = pd.merge(df_flow, df_daily, on=['ts_code', 'trade_date'], how='left')
-                else:
-                    df = df_flow
-                
-                # 将净流入金额转换为数值型并重命名
-                if 'net_mf_amount' in df.columns:
-                    df['net_mf_amount'] = pd.to_numeric(df['net_mf_amount'], errors='coerce')
-                    # 保持列名一致性，创建net_amount列
-                    df['net_amount'] = df['net_mf_amount']
-                    print(f"净流入金额: {df['net_amount'].iloc[0]} (单位:万元)")
-                
-                # 获取股票名称
-                stock_names = get_data_with_retry(pro.stock_basic, ts_code=stock_code, 
-                                                fields='ts_code,name')
-                
-                if not stock_names.empty:
-                    df = pd.merge(df, stock_names, on=['ts_code'], how='left')
-                
-                all_data.append(df)
-                
-                # 成功获取数据后等待短暂时间，避免API限制
-                time.sleep(0.5)
-                continue  # 继续下一支股票
-            else:
-                print(f"资金流向数据获取失败，尝试获取日线数据...")
-            
-            # 如果资金流向数据获取失败，至少获取日线数据
-            df_daily = get_data_with_retry(pro.daily, ts_code=stock_code, trade_date=trade_date, 
-                                        fields='ts_code,trade_date,open,high,low,close,vol,amount,pct_chg')
-            
-            # 获取股票基本信息
-            df_basic = get_data_with_retry(pro.daily_basic, ts_code=stock_code, trade_date=trade_date, 
-                                        fields='ts_code,turnover_rate,volume_ratio,pe,pb')
-            
-            # 合并数据
-            if not df_daily.empty:
-                df = df_daily
-                if not df_basic.empty:
-                    df = pd.merge(df, df_basic, on=['ts_code'], how='left')
-                
-                # 获取股票名称
-                stock_names = get_data_with_retry(pro.stock_basic, ts_code=stock_code, 
-                                                fields='ts_code,name')
-                
-                if not stock_names.empty:
-                    df = pd.merge(df, stock_names, on=['ts_code'], how='left')
-                
-                # 使用成交额作为备选数据
-                if 'amount' in df.columns:
-                    df['net_amount'] = df['amount'] * 0.1  # 假设净流入为总成交额的10%
-                    print(f"警告：使用成交额的10%作为净流入额的估计值")
-                
-                all_data.append(df)
-            else:
-                print(f"未能获取股票 {stock_code} 的任何数据")
+        if all_stocks_flow.empty:
+            print(f"无法获取 {trade_date} 日所有股票的资金流向数据")
+            return pd.DataFrame()
         
-        except Exception as e:
-            print(f"获取股票 {stock_code} 数据时出错: {e}")
+        print(f"成功获取 {len(all_stocks_flow)} 支股票的资金流向数据")
         
-        # 每个股票请求后添加短暂延迟，避免频繁请求触发API限制
-        time.sleep(1)
+        # 筛选出需要的股票
+        stock_set = set(stock_list)
+        filtered_data = all_stocks_flow[all_stocks_flow['ts_code'].isin(stock_set)]
         
-        # 每获取10支股票后休息5秒，以避免API频率限制
-        if (i + 1) % 10 == 0 and i + 1 < total_stocks:
-            rest_time = 5
-            print(f"已获取{i + 1}支股票数据，休息{rest_time}秒后继续...")
-            time.sleep(rest_time)
-    
-    # 合并所有股票的数据
-    if all_data:
-        result_df = pd.concat(all_data)
-        print(f"成功获取 {len(result_df)} 条股票资金流向数据")
+        # 计算筛选后的股票数量
+        filtered_count = len(filtered_data)
+        print(f"在行业成分股中找到 {filtered_count}/{len(stock_list)} 支股票的资金流向数据")
         
-        # 打印数据列名，帮助调试
-        print(f"数据列名: {result_df.columns.tolist()}")
+        if filtered_count == 0:
+            print("警告: 未找到任何指定股票的资金流向数据")
+            return pd.DataFrame()
         
-        return result_df
-    else:
+        # 确保净流入金额列存在，并复制为net_amount以保持代码兼容性
+        if 'net_mf_amount' in filtered_data.columns:
+            filtered_data['net_mf_amount'] = pd.to_numeric(filtered_data['net_mf_amount'], errors='coerce')
+            filtered_data['net_amount'] = filtered_data['net_mf_amount']
+            print(f"已获取净流入金额数据(net_mf_amount)")
+        
+        # 获取股票名称等基本信息
+        stock_basic_info = get_data_with_retry(pro.stock_basic, 
+                                           fields='ts_code,name,industry,market,area',
+                                           exchange='',
+                                           list_status='L')
+        
+        if not stock_basic_info.empty:
+            filtered_data = pd.merge(filtered_data, stock_basic_info, on=['ts_code'], how='left')
+            print("已关联股票基本信息(名称、行业等)")
+        
+        return filtered_data
+        
+    except Exception as e:
+        print(f"获取股票资金流向数据时出错: {e}")
         return pd.DataFrame()
 
 def plot_industry_top_stocks(industry_name, stocks_df, trade_date, industry_rank, total_industries, save_fig=True, show_fig=True):
