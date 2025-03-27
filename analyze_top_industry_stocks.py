@@ -114,6 +114,9 @@ def get_top_stocks_by_industry(token=None, date=None, top_industry_count=3, top_
             print(f"未找到行业 {industry_name} 的成分股信息")  # 打印警告信息
             continue  # 跳过当前行业，继续下一个
         
+        # 提示正在获取的成分股数量
+        print(f"开始获取 {len(stocks_in_industry)} 支成分股的资金流向数据...")
+        
         # 获取这些股票的资金流向数据
         stocks_data = get_stocks_moneyflow(pro, stocks_in_industry, trade_date)  # 调用函数获取股票的资金流向数据
         
@@ -248,7 +251,16 @@ def get_industry_stocks(pro, industry_code, trade_date=None, retries=3, retry_de
                 df = get_data_with_retry(pro.ths_member, ts_code=industry_code)
                 
                 if not df.empty:
-                    stock_list = df['ts_code'].tolist()
+                    # 获取所有股票代码，过滤掉任何与行业指数代码相同的记录
+                    stock_list = [code for code in df['ts_code'].tolist() if code != industry_code]
+                    
+                    # 验证是否所有代码都是个股代码（通常个股代码以.SZ或.SH结尾）
+                    valid_stocks = [code for code in stock_list if code.endswith(('.SZ', '.SH'))]
+                    
+                    if len(valid_stocks) < len(stock_list):
+                        print(f"注意: 移除了 {len(stock_list) - len(valid_stocks)} 个非个股代码")
+                        stock_list = valid_stocks
+                    
                     print(f"通过ths_member成功获取到 {len(stock_list)} 支成分股")
                     return stock_list
                 
