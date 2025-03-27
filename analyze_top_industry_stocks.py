@@ -11,6 +11,14 @@ import plot_industry_moneyflow as pim  # 导入行业资金流向模块
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置默认字体为黑体
 plt.rcParams['axes.unicode_minus'] = False  # 解决保存图像时负号'-'显示为方块的问题
 
+"""
+深入分析热点行业中的个股资金流向情况
+拉取热点行业个股每日的资金净流入金额，识别热点行业中的热门个股，配合行业数据进行交叉验证
+先根据Tushare的同花顺行业资金流向（THS）返回的行业对应的ts_code，使用Tushare的指数成分和权重API接口获取对应的成分股列表，获取成分股的con_code，
+再利用con_code，使用Tusahre的个股资金流向（THS）API接口获取每支股票的单日资金净流入数据
+根据净流入数据排序之后，取前十名画柱状图展示结果
+"""
+
 def get_top_stocks_by_industry(token=None, date=None, top_industry_count=3, top_stock_count=10, save_fig=True, show_fig=True):
     """
     分析净流入最高的前几个行业中，哪些股票的成交额和净流入额最高
