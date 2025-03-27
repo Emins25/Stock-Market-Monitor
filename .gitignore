@@ -9,10 +9,6 @@ __pycache__/
 *.tmp
 *.log
 
-# 生成的图片和PDF
-*.png
-*.pdf
-
 # 系统文件
 .DS_Store
 Thumbs.db 
