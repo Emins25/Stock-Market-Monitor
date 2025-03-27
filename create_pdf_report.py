@@ -9,6 +9,7 @@ from reportlab.lib.units import inch, cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+import platform
 
 def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     """
@@ -17,6 +18,51 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     参数:
         output_filename: 输出的PDF文件名
     """
+    # 注册中文字体
+    # 根据不同操作系统选择合适的中文字体
+    system = platform.system()
+    if system == 'Windows':
+        # Windows系统使用微软雅黑或宋体
+        try:
+            # 先尝试微软雅黑
+            pdfmetrics.registerFont(TTFont('chinese_font', 'C:/Windows/Fonts/msyh.ttc'))
+            print("已注册字体: 微软雅黑")
+        except:
+            try:
+                # 再尝试宋体
+                pdfmetrics.registerFont(TTFont('chinese_font', 'C:/Windows/Fonts/simsun.ttc'))
+                print("已注册字体: 宋体")
+            except Exception as e:
+                # 最后尝试黑体
+                try:
+                    pdfmetrics.registerFont(TTFont('chinese_font', 'C:/Windows/Fonts/simhei.ttf'))
+                    print("已注册字体: 黑体")
+                except Exception as e:
+                    print(f"注册中文字体失败: {e}")
+                    print("请确保系统中安装了中文字体，PDF报告中的中文可能显示为乱码")
+    elif system == 'Darwin':  # macOS
+        try:
+            # macOS系统使用苹方或华文黑体
+            pdfmetrics.registerFont(TTFont('chinese_font', '/System/Library/Fonts/PingFang.ttc'))
+            print("已注册字体: 苹方")
+        except:
+            try:
+                pdfmetrics.registerFont(TTFont('chinese_font', '/System/Library/Fonts/STHeiti Light.ttc'))
+                print("已注册字体: 华文黑体")
+            except Exception as e:
+                print(f"注册中文字体失败: {e}")
+    else:  # Linux或其他系统
+        try:
+            # Linux系统尝试使用文泉驿或Noto Sans CJK
+            pdfmetrics.registerFont(TTFont('chinese_font', '/usr/share/fonts/wenquanyi/wqy-microhei.ttc'))
+            print("已注册字体: 文泉驿微米黑")
+        except:
+            try:
+                pdfmetrics.registerFont(TTFont('chinese_font', '/usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc'))
+                print("已注册字体: Noto Sans CJK")
+            except Exception as e:
+                print(f"注册中文字体失败: {e}")
+    
     # 获取最近生成的图表文件
     def get_latest_figure(pattern):
         files = glob.glob(pattern)
@@ -30,10 +76,11 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     doc = SimpleDocTemplate(output_filename, pagesize=A4)
     styles = getSampleStyleSheet()
     
-    # 创建自定义样式
+    # 创建自定义样式，使用已注册的中文字体
     title_style = ParagraphStyle(
         'TitleStyle',
         parent=styles['Heading1'],
+        fontName='chinese_font',  # 使用注册的中文字体
         fontSize=24,
         textColor=colors.darkblue,
         alignment=TA_CENTER,
@@ -43,6 +90,7 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     subtitle_style = ParagraphStyle(
         'SubtitleStyle',
         parent=styles['Heading2'],
+        fontName='chinese_font',  # 使用注册的中文字体
         fontSize=16,
         textColor=colors.darkblue,
         spaceBefore=10,
@@ -52,6 +100,7 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     normal_style = ParagraphStyle(
         'NormalStyle',
         parent=styles['Normal'],
+        fontName='chinese_font',  # 使用注册的中文字体
         fontSize=10,
         spaceBefore=5,
         spaceAfter=5
@@ -186,6 +235,9 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     
     # 构建PDF
     doc.build(content)
+    
+    print(f"PDF报告已生成: {output_filename}")
+    print(f"如果报告中出现中文乱码，请检查系统中的中文字体是否正确安装")
     
     return output_filename
 
