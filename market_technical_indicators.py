@@ -9,9 +9,19 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import tushare as ts
-from logger import setup_logger
+import logging
+import os
+import sys
 
-logger = setup_logger('technical_indicators')
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger('technical_indicators')
 
 # 初始化tushare
 TOKEN = '284b804f2f919ea85cb7e6dfe617ff81f123c80b4cd3c4b13b35d736'
