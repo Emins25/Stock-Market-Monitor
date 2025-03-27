@@ -9,12 +9,12 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import tushare as ts
-from config import TOKEN
 from logger import setup_logger
 
 logger = setup_logger('technical_indicators')
 
 # 初始化tushare
+TOKEN = '284b804f2f919ea85cb7e6dfe617ff81f123c80b4cd3c4b13b35d736'
 ts.set_token(TOKEN)
 pro = ts.pro_api()
 
