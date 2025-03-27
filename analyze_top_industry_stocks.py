@@ -274,7 +274,7 @@ def get_industry_stocks(pro, industry_code, trade_date=None, retries=3, retry_de
 
 def get_stocks_moneyflow(pro, stock_list, trade_date):
     """
-    获取多支股票的资金流向数据
+    获取多支股票的资金流向数据，一次请求一支股票
     
     参数:
     pro: tushare pro接口
@@ -285,24 +285,22 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
     DataFrame: 包含股票资金流向数据
     """
     all_data = []
+    total_stocks = len(stock_list)
     
-    # 由于API限制，每次请求不超过50支股票
-    batch_size = 50
-    
-    for i in range(0, len(stock_list), batch_size):
-        batch = stock_list[i:i + batch_size]
-        print(f"获取第 {i//batch_size + 1} 批股票资金流向数据 ({len(batch)} 支)...")
+    # 改为逐个获取每支股票的数据，以提高成功率
+    for i, stock_code in enumerate(stock_list):
+        print(f"获取第 {i+1}/{total_stocks} 支股票 {stock_code} 的资金流向数据...")
         
         try:
             # 优先使用同花顺个股资金流向API，该接口提供完整的净流入数据
             print(f"使用同花顺个股资金流向(THS)API获取数据...")
-            df_flow_ths = get_data_with_retry(pro.moneyflow_ths, ts_code=','.join(batch), trade_date=trade_date)
+            df_flow_ths = get_data_with_retry(pro.moneyflow_ths, ts_code=stock_code, trade_date=trade_date)
             
             if not df_flow_ths.empty:
-                print(f"成功获取同花顺资金流向数据，包含 {len(df_flow_ths)} 条记录")
+                print(f"成功获取同花顺资金流向数据")
                 
                 # 获取日线数据以补充成交额等信息
-                df_daily = get_data_with_retry(pro.daily, ts_code=','.join(batch), trade_date=trade_date, 
+                df_daily = get_data_with_retry(pro.daily, ts_code=stock_code, trade_date=trade_date, 
                                             fields='ts_code,trade_date,open,high,low,close,vol,amount')
                 
                 # 合并同花顺数据和日线数据
@@ -315,10 +313,13 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
                 if 'net_amount' in df.columns:
                     df['net_amount'] = pd.to_numeric(df['net_amount'], errors='coerce')
                     # 检查单位：同花顺API返回的net_amount单位为万元
-                    print(f"净流入金额范围: {df['net_amount'].min()} 至 {df['net_amount'].max()} (单位:万元)")
+                    print(f"净流入金额: {df['net_amount'].iloc[0]} (单位:万元)")
                 
                 all_data.append(df)
-                continue  # 成功获取数据，继续下一批次
+                
+                # 成功获取数据后等待短暂时间，避免API限制
+                time.sleep(0.5)
+                continue  # 继续下一支股票
             else:
                 print(f"同花顺资金流向数据获取失败，尝试使用其他API...")
             
@@ -326,14 +327,14 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
             print(f"使用标准资金流向API获取数据...")
             
             # 获取股票日线数据
-            df_daily = get_data_with_retry(pro.daily, ts_code=','.join(batch), trade_date=trade_date, 
+            df_daily = get_data_with_retry(pro.daily, ts_code=stock_code, trade_date=trade_date, 
                                         fields='ts_code,trade_date,open,high,low,close,vol,amount')
             
             # 获取股票资金流向数据
-            df_flow = get_data_with_retry(pro.moneyflow, ts_code=','.join(batch), trade_date=trade_date)
+            df_flow = get_data_with_retry(pro.moneyflow, ts_code=stock_code, trade_date=trade_date)
             
             # 获取股票基本信息
-            df_basic = get_data_with_retry(pro.daily_basic, ts_code=','.join(batch), trade_date=trade_date, 
+            df_basic = get_data_with_retry(pro.daily_basic, ts_code=stock_code, trade_date=trade_date, 
                                         fields='ts_code,turnover_rate,volume_ratio,pe,pb')
             
             # 合并数据
@@ -344,7 +345,7 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
                     df = pd.merge(df, df_basic, on=['ts_code'], how='left')
                 
                 # 获取股票名称
-                stock_names = get_data_with_retry(pro.stock_basic, ts_code=','.join(batch), 
+                stock_names = get_data_with_retry(pro.stock_basic, ts_code=stock_code, 
                                                 fields='ts_code,name')
                 
                 if not stock_names.empty:
@@ -356,11 +357,22 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
                     print(f"从买入卖出金额计算净流入")
                 
                 all_data.append(df)
+            else:
+                print(f"未能获取股票 {stock_code} 的数据")
         
         except Exception as e:
-            print(f"获取股票数据时出错: {e}")
+            print(f"获取股票 {stock_code} 数据时出错: {e}")
+        
+        # 每个股票请求后添加短暂延迟，避免频繁请求触发API限制
+        time.sleep(1)
+        
+        # 每获取10支股票后休息5秒，以避免API频率限制
+        if (i + 1) % 10 == 0 and i + 1 < total_stocks:
+            rest_time = 5
+            print(f"已获取{i + 1}支股票数据，休息{rest_time}秒后继续...")
+            time.sleep(rest_time)
     
-    # 合并所有批次的数据
+    # 合并所有股票的数据
     if all_data:
         result_df = pd.concat(all_data)
         print(f"成功获取 {len(result_df)} 条股票资金流向数据")
