@@ -4,6 +4,16 @@
 """
 市场监测报告生成器
 自动执行市场分析并生成一份完整的PDF报告
+
+主要功能：
+1. 市场指数表现分析：监测主要市场指数（如上证指数、深证成指、沪深300等）的涨跌幅情况
+2. 行业资金流向分析：分析各行业资金净流入/流出情况，识别热门与冷门行业
+3. 热点个股资金流向分析：深入分析热点行业中的个股资金流向情况
+   - 先使用同花顺行业资金流向(THS)API获取行业ts_code
+   - 使用指数成分和权重API获取对应成分股列表(con_code)
+   - 使用个股资金流向(THS)API获取每支股票的单日资金净流入数据
+   - 按净流入金额排序后，取前十名绘制柱状图
+4. 自动生成PDF报告：整合所有分析结果成一份完整报告
 """
 
 import os
@@ -77,6 +87,11 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     # 3. 生成热点行业个股分析图
     print("\n[3/3] 正在分析热点行业个股资金流向...")
+    # 通过以下步骤实现：
+    # - 获取行业资金流向数据，获取净流入最高的行业及其ts_code
+    # - 使用指数成分和权重API获取行业成分股列表
+    # - 使用个股资金流向(THS)API获取每支股票的资金净流入数据
+    # - 排序后取前N名，生成柱状图
     industry_stocks = get_top_stocks_by_industry(token=token, date=date, 
                                               top_industry_count=top_industry_count, 
                                               top_stock_count=top_stock_count,
