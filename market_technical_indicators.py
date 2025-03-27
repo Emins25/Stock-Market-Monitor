@@ -117,36 +117,52 @@ def calculate_kdj(data, n=9, m1=3, m2=3):
     返回:
         pd.DataFrame: 包含KDJ指标的DataFrame
     """
-    if not all(col in data.columns for col in ['high', 'low', 'close']):
-        raise ValueError("输入数据必须包含'high'、'low'和'close'列")
-    
-    # 复制数据，避免修改原始数据
-    df = data.copy()
-    
-    # 计算n日内的最低价和最高价
-    low_n = df['low'].rolling(window=n).min()
-    high_n = df['high'].rolling(window=n).max()
-    
-    # 计算RSV
-    rsv = 100 * (df['close'] - low_n) / (high_n - low_n)
-    
-    # 计算K值、D值和J值
-    k = pd.Series(0.0, index=df.index)
-    d = pd.Series(0.0, index=df.index)
-    
-    for i in range(len(df)):
-        if i == 0:
-            k[i] = 50
-            d[i] = 50
+    try:
+        # 确保必要的列存在
+        required_cols = ['high', 'low', 'close']
+        missing_cols = [col for col in required_cols if col not in data.columns]
+        if missing_cols:
+            logger.warning(f"计算KDJ时缺少列: {missing_cols}")
+            # 如果缺少列，尝试使用其他列代替
+            df = data.copy()
+            if 'high' not in df.columns and 'close' in df.columns:
+                logger.warning("使用close列代替high列")
+                df['high'] = df['close']
+            if 'low' not in df.columns and 'close' in df.columns:
+                logger.warning("使用close列代替low列")
+                df['low'] = df['close']
+            if 'close' not in df.columns:
+                logger.error("无法计算KDJ：缺少close列且无法替代")
+                return pd.DataFrame(index=data.index)
         else:
+            df = data.copy()
+        
+        # 计算n日内的最低价和最高价
+        low_n = df['low'].rolling(window=n).min()
+        high_n = df['high'].rolling(window=n).max()
+        
+        # 计算RSV，并处理可能的除以零情况
+        rsv_diff = high_n - low_n
+        rsv = pd.Series(0.0, index=df.index)
+        non_zero_idx = rsv_diff != 0
+        rsv[non_zero_idx] = 100 * (df['close'][non_zero_idx] - low_n[non_zero_idx]) / rsv_diff[non_zero_idx]
+        
+        # 计算K值、D值和J值
+        k = pd.Series(50.0, index=df.index)
+        d = pd.Series(50.0, index=df.index)
+        
+        for i in range(1, len(df)):
             k[i] = (m1 - 1) * k[i-1] / m1 + rsv[i] / m1
             d[i] = (m2 - 1) * d[i-1] / m2 + k[i] / m2
-    
-    j = 3 * k - 2 * d
-    
-    # 结果DataFrame
-    result = pd.DataFrame({'k': k, 'd': d, 'j': j}, index=df.index)
-    return result
+        
+        j = 3 * k - 2 * d
+        
+        # 结果DataFrame
+        result = pd.DataFrame({'k': k, 'd': d, 'j': j}, index=df.index)
+        return result
+    except Exception as e:
+        logger.error(f"计算KDJ时出错: {str(e)}")
+        return pd.DataFrame(index=data.index)
 
 def get_indicator_signals(data, indicators):
     """
@@ -263,8 +279,12 @@ def plot_technical_indicators(data, title=None):
     
     fig = plt.figure(figsize=(14, 12))
     
+    # 创建子图数量 - 如果KDJ数据可用则为4，否则为3
+    has_kdj = all(col in data.columns for col in ['k', 'd', 'j']) and not data['k'].isna().all()
+    plot_count = 4 if has_kdj else 3
+    
     # 绘制K线图
-    ax1 = plt.subplot2grid((4, 1), (0, 0), rowspan=1)
+    ax1 = plt.subplot2grid((plot_count, 1), (0, 0), rowspan=1)
     ax1.plot(data.index, data['close'], 'b-', label='收盘价')
     ax1.set_title(title or "技术指标分析")
     ax1.legend(loc='upper right')
@@ -272,7 +292,7 @@ def plot_technical_indicators(data, title=None):
     
     # 绘制MACD
     if all(col in data.columns for col in ['dif', 'dea', 'macd']):
-        ax2 = plt.subplot2grid((4, 1), (1, 0), rowspan=1, sharex=ax1)
+        ax2 = plt.subplot2grid((plot_count, 1), (1, 0), rowspan=1, sharex=ax1)
         ax2.plot(data.index, data['dif'], 'r-', label='DIF')
         ax2.plot(data.index, data['dea'], 'g-', label='DEA')
         ax2.bar(data.index, data['macd'], color='blue', label='MACD')
@@ -284,7 +304,7 @@ def plot_technical_indicators(data, title=None):
     # 绘制RSI
     rsi_cols = [col for col in data.columns if col.startswith('rsi_')]
     if rsi_cols:
-        ax3 = plt.subplot2grid((4, 1), (2, 0), rowspan=1, sharex=ax1)
+        ax3 = plt.subplot2grid((plot_count, 1), (2, 0), rowspan=1, sharex=ax1)
         for col in rsi_cols:
             ax3.plot(data.index, data[col], label=col.upper())
         
@@ -299,19 +319,26 @@ def plot_technical_indicators(data, title=None):
         ax3.legend(loc='upper right')
         ax3.grid(True, linestyle='--', alpha=0.3)
     
-    # 重新计算KDJ（确保有值）
+    # 强制重新计算KDJ
     try:
-        # 当KDJ没有值或值全为NaN时，尝试重新计算
-        if 'k' not in data.columns or data['k'].isna().all():
-            logger.info("重新计算KDJ指标")
-            kdj_data = calculate_kdj(data)
-            data = pd.concat([data, kdj_data], axis=1)
+        # 总是重新计算KDJ
+        logger.info("重新计算KDJ指标")
+        kdj_data = calculate_kdj(data)
+        if not kdj_data.empty and not kdj_data['k'].isna().all():
+            data['k'] = kdj_data['k']
+            data['d'] = kdj_data['d']
+            data['j'] = kdj_data['j']
+            has_kdj = True
+        else:
+            logger.warning("计算的KDJ数据为空或全为NaN")
+            has_kdj = False
     except Exception as e:
         logger.warning(f"重新计算KDJ时出错: {str(e)}")
+        has_kdj = False
     
     # 绘制KDJ
-    if all(col in data.columns for col in ['k', 'd', 'j']):
-        ax4 = plt.subplot2grid((4, 1), (3, 0), rowspan=1, sharex=ax1)
+    if has_kdj:
+        ax4 = plt.subplot2grid((plot_count, 1), (3, 0), rowspan=1, sharex=ax1)
         ax4.plot(data.index, data['k'], 'b-', label='K')
         ax4.plot(data.index, data['d'], 'g-', label='D')
         ax4.plot(data.index, data['j'], 'r-', label='J')
@@ -326,6 +353,8 @@ def plot_technical_indicators(data, title=None):
         ax4.set_ylim(0, 100)  # 设置固定的y轴范围
         ax4.legend(loc='upper right')
         ax4.grid(True, linestyle='--', alpha=0.3)
+    else:
+        logger.warning("KDJ数据不可用，跳过KDJ图表")
     
     plt.tight_layout()
     return fig
@@ -510,6 +539,9 @@ if __name__ == "__main__":
                 if len(df) < 120:
                     logger.warning(f"本地数据仅有{len(df)}条记录，少于请求的120条")
                 
+                # 确保列名全部小写
+                df.columns = [col.lower() for col in df.columns]
+                
                 # 计算技术指标
                 macd_data = calculate_macd(df)
                 rsi_data = calculate_rsi(df)
@@ -517,6 +549,11 @@ if __name__ == "__main__":
                 
                 # 合并数据
                 result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
+                
+                # 打印数据列，用于调试
+                logger.info(f"数据列: {list(result.columns)}")
+                logger.info(f"数据行数: {len(result)}")
+                
                 return result
             else:
                 logger.warning(f"本地测试数据文件不存在: {local_file}")
@@ -527,10 +564,49 @@ if __name__ == "__main__":
     
     try:
         # 使用固定历史日期数据，避免网络和未来日期问题
-        start_date = '20220101'
-        end_date = '20220601'
+        start_date = '20240924'
+        end_date = '20250327'
         
         logger.info(f"尝试获取 000001.SH 从 {start_date} 到 {end_date} 的数据")
+        
+        # 创建模拟数据集进行测试
+        def create_mock_data():
+            logger.info("创建模拟数据集用于测试")
+            # 生成日期范围
+            dates = pd.date_range(start='2024-09-24', end='2025-03-27', freq='B')
+            
+            # 生成示例价格数据
+            n = len(dates)
+            np.random.seed(42)  # 设置随机种子以保证可重复性
+            
+            # 生成收盘价
+            close = 3000 + np.cumsum(np.random.normal(0, 30, n))
+            # 确保价格在合理范围内
+            close = np.clip(close, 2800, 3600)
+            
+            # 生成开盘价、最高价、最低价
+            open_price = close + np.random.normal(0, 20, n)
+            high = np.maximum(close, open_price) + np.random.normal(10, 10, n)
+            low = np.minimum(close, open_price) - np.random.normal(10, 10, n)
+            
+            # 创建DataFrame
+            df = pd.DataFrame({
+                'open': open_price,
+                'high': high,
+                'low': low,
+                'close': close,
+                'vol': np.random.normal(3e8, 5e7, n),
+                'amount': np.random.normal(3.5e8, 5e7, n)
+            }, index=dates)
+            
+            # 计算技术指标
+            macd_data = calculate_macd(df)
+            rsi_data = calculate_rsi(df)
+            kdj_data = calculate_kdj(df)
+            
+            # 合并数据
+            result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
+            return result
         
         # 尝试在线获取数据
         market_data = get_stock_indicators('000001.SH', start_date, end_date)
@@ -539,6 +615,11 @@ if __name__ == "__main__":
         if market_data is None:
             logger.warning("在线数据获取失败，尝试使用本地测试数据")
             market_data = try_local_data()
+            
+            # 如果本地数据也不可用，使用模拟数据
+            if market_data is None:
+                logger.warning("本地数据不可用，使用模拟数据")
+                market_data = create_mock_data()
         
         if market_data is not None:
             # 预测顶底
