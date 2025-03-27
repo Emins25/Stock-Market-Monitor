@@ -294,7 +294,8 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
         try:
             # 优先使用同花顺个股资金流向API，该接口提供完整的净流入数据
             print(f"使用同花顺个股资金流向(THS)API获取数据...")
-            df_flow_ths = get_data_with_retry(pro.moneyflow_ths, ts_code=stock_code, trade_date=trade_date)
+            # 使用start_date和end_date参数替代trade_date参数
+            df_flow_ths = get_data_with_retry(pro.moneyflow_ths, ts_code=stock_code, start_date=trade_date, end_date=trade_date)
             
             if not df_flow_ths.empty:
                 print(f"成功获取同花顺资金流向数据")
