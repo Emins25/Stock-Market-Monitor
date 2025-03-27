@@ -32,7 +32,8 @@ import matplotlib.pyplot as plt
 import tushare as ts
 from plot_index_performance import plot_index_performance
 from plot_industry_moneyflow import plot_industry_moneyflow
-from analyze_top_industry_stocks import get_top_stocks_by_industry
+# 注释掉热点行业个股分析的导入
+# from analyze_top_industry_stocks import get_top_stocks_by_industry
 from analyze_market_moneyflow import analyze_market_moneyflow
 from analyze_price_volume_divergence import analyze_price_volume_divergence
 from analyze_capital_concentration import analyze_capital_concentration
@@ -77,7 +78,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
         end_date = date
     
     # 1. 生成大盘指数表现图
-    print("\n[1/6] 正在生成市场指数表现图...")
+    print("\n[1/5] 正在生成市场指数表现图...")
     
     # 定义指数名称字典
     index_names = {
@@ -95,10 +96,12 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"市场指数表现图生成完成")
     
     # 2. 生成行业资金流向图
-    print("\n[2/6] 正在生成行业资金流向图...")
+    print("\n[2/5] 正在生成行业资金流向图...")
     df_industry = plot_industry_moneyflow(token=token, date=end_date, top_n=10, save_fig=True, show_fig=False)
     print(f"行业资金流向图生成完成")
     
+    # 注释掉热点行业个股分析部分
+    """
     # 3. 生成热点行业个股分析图
     print("\n[3/6] 正在分析热点行业个股资金流向...")
     # 通过以下步骤实现：
@@ -112,9 +115,10 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
                                               save_fig=True, show_fig=False)
     
     print(f"热点行业个股分析完成")
+    """
     
-    # 4. 分析全市场个股资金净流入情况
-    print("\n[4/6] 正在分析全市场个股资金净流入情况...")
+    # 3. 分析全市场个股资金净流入情况
+    print("\n[3/5] 正在分析全市场个股资金净流入情况...")
     # 通过以下步骤实现：
     # - 拉取全市场个股的当日资金净流入数据
     # - 分别按净流入金额和流入率排序，取前10名
@@ -125,8 +129,8 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"全市场个股资金净流入分析完成")
     
-    # 5. 分析量价背离指数
-    print("\n[5/6] 正在分析量价背离指数...")
+    # 4. 分析量价背离指数
+    print("\n[4/5] 正在分析量价背离指数...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的量价背离指数
     # - 绘制折线图展示结果
@@ -136,8 +140,8 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"量价背离指数分析完成")
     
-    # 6. 分析资金集中度指标
-    print("\n[6/6] 正在分析资金集中度指标...")
+    # 5. 分析资金集中度指标
+    print("\n[5/5] 正在分析资金集中度指标...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的资金集中度指标
     # - 绘制折线图展示结果
@@ -147,7 +151,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"资金集中度指标分析完成")
     
-    # 7. 生成PDF报告
+    # 6. 生成PDF报告
     print("\n正在生成PDF报告...")
     report_filename = f"Stock_Market_Monitor_{end_date}.pdf"
     create_pdf_report(output_filename=report_filename)
