@@ -104,73 +104,13 @@ def calculate_rsi(data, periods=[6, 12, 24]):
     
     return result
 
-def calculate_kdj(data, n=9, m1=3, m2=3):
-    """
-    计算KDJ指标
-    
-    参数:
-        data (pd.DataFrame): 包含OHLC数据的DataFrame，必须有'high'、'low'和'close'列
-        n (int): RSV计算周期
-        m1 (int): K值平滑因子
-        m2 (int): D值平滑因子
-        
-    返回:
-        pd.DataFrame: 包含KDJ指标的DataFrame
-    """
-    try:
-        # 确保必要的列存在
-        required_cols = ['high', 'low', 'close']
-        missing_cols = [col for col in required_cols if col not in data.columns]
-        if missing_cols:
-            logger.warning(f"计算KDJ时缺少列: {missing_cols}")
-            # 如果缺少列，尝试使用其他列代替
-            df = data.copy()
-            if 'high' not in df.columns and 'close' in df.columns:
-                logger.warning("使用close列代替high列")
-                df['high'] = df['close']
-            if 'low' not in df.columns and 'close' in df.columns:
-                logger.warning("使用close列代替low列")
-                df['low'] = df['close']
-            if 'close' not in df.columns:
-                logger.error("无法计算KDJ：缺少close列且无法替代")
-                return pd.DataFrame(index=data.index)
-        else:
-            df = data.copy()
-        
-        # 计算n日内的最低价和最高价
-        low_n = df['low'].rolling(window=n).min()
-        high_n = df['high'].rolling(window=n).max()
-        
-        # 计算RSV，并处理可能的除以零情况
-        rsv_diff = high_n - low_n
-        rsv = pd.Series(0.0, index=df.index)
-        non_zero_idx = rsv_diff != 0
-        rsv[non_zero_idx] = 100 * (df['close'][non_zero_idx] - low_n[non_zero_idx]) / rsv_diff[non_zero_idx]
-        
-        # 计算K值、D值和J值
-        k = pd.Series(50.0, index=df.index)
-        d = pd.Series(50.0, index=df.index)
-        
-        for i in range(1, len(df)):
-            k[i] = (m1 - 1) * k[i-1] / m1 + rsv[i] / m1
-            d[i] = (m2 - 1) * d[i-1] / m2 + k[i] / m2
-        
-        j = 3 * k - 2 * d
-        
-        # 结果DataFrame
-        result = pd.DataFrame({'k': k, 'd': d, 'j': j}, index=df.index)
-        return result
-    except Exception as e:
-        logger.error(f"计算KDJ时出错: {str(e)}")
-        return pd.DataFrame(index=data.index)
-
 def get_indicator_signals(data, indicators):
     """
     根据技术指标生成买入卖出信号
     
     参数:
         data (pd.DataFrame): 包含价格和指标数据的DataFrame
-        indicators (list): 需要分析的指标列表，可包含'macd'、'rsi'、'kdj'等
+        indicators (list): 需要分析的指标列表，可包含'macd'、'rsi'等
         
     返回:
         pd.DataFrame: 包含买入卖出信号的DataFrame
@@ -193,14 +133,6 @@ def get_indicator_signals(data, indicators):
         
         # RSI超卖
         signals.loc[data['rsi_14'] < 30, 'rsi_signal'] = 1
-    
-    # KDJ信号
-    if 'kdj' in indicators and all(col in data.columns for col in ['k', 'd']):
-        # KDJ金叉：K线从下向上穿越D线
-        signals.loc[(data['k'] > data['d']) & (data['k'].shift(1) <= data['d'].shift(1)), 'kdj_signal'] = 1
-        
-        # KDJ死叉：K线从上向下穿越D线
-        signals.loc[(data['k'] < data['d']) & (data['k'].shift(1) >= data['d'].shift(1)), 'kdj_signal'] = -1
     
     return signals
 
@@ -245,10 +177,9 @@ def get_stock_indicators(ts_code, start_date, end_date):
             # 计算技术指标
             macd_data = calculate_macd(df)
             rsi_data = calculate_rsi(df)
-            kdj_data = calculate_kdj(df)
             
             # 合并数据
-            result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
+            result = pd.concat([df, macd_data, rsi_data], axis=1)
             
             return result
         
@@ -277,11 +208,10 @@ def plot_technical_indicators(data, title=None):
     plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']  # 优先使用的中文字体
     plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
     
-    fig = plt.figure(figsize=(14, 12))
+    fig = plt.figure(figsize=(14, 10))
     
-    # 创建子图数量 - 如果KDJ数据可用则为4，否则为3
-    has_kdj = all(col in data.columns for col in ['k', 'd', 'j']) and not data['k'].isna().all()
-    plot_count = 4 if has_kdj else 3
+    # 创建子图数量 - 总共3个（价格、MACD、RSI）
+    plot_count = 3
     
     # 绘制K线图
     ax1 = plt.subplot2grid((plot_count, 1), (0, 0), rowspan=1)
@@ -319,43 +249,6 @@ def plot_technical_indicators(data, title=None):
         ax3.legend(loc='upper right')
         ax3.grid(True, linestyle='--', alpha=0.3)
     
-    # 强制重新计算KDJ
-    try:
-        # 总是重新计算KDJ
-        logger.info("重新计算KDJ指标")
-        kdj_data = calculate_kdj(data)
-        if not kdj_data.empty and not kdj_data['k'].isna().all():
-            data['k'] = kdj_data['k']
-            data['d'] = kdj_data['d']
-            data['j'] = kdj_data['j']
-            has_kdj = True
-        else:
-            logger.warning("计算的KDJ数据为空或全为NaN")
-            has_kdj = False
-    except Exception as e:
-        logger.warning(f"重新计算KDJ时出错: {str(e)}")
-        has_kdj = False
-    
-    # 绘制KDJ
-    if has_kdj:
-        ax4 = plt.subplot2grid((plot_count, 1), (3, 0), rowspan=1, sharex=ax1)
-        ax4.plot(data.index, data['k'], 'b-', label='K')
-        ax4.plot(data.index, data['d'], 'g-', label='D')
-        ax4.plot(data.index, data['j'], 'r-', label='J')
-        
-        # 标记超买超卖区域
-        ax4.axhline(y=20, color='g', linestyle='--', alpha=0.5)
-        ax4.axhline(y=80, color='r', linestyle='--', alpha=0.5)
-        ax4.fill_between(data.index, 0, 20, color='g', alpha=0.1)
-        ax4.fill_between(data.index, 80, 100, color='r', alpha=0.1)
-        
-        ax4.set_title("KDJ指标")
-        ax4.set_ylim(0, 100)  # 设置固定的y轴范围
-        ax4.legend(loc='upper right')
-        ax4.grid(True, linestyle='--', alpha=0.3)
-    else:
-        logger.warning("KDJ数据不可用，跳过KDJ图表")
-    
     plt.tight_layout()
     return fig
 
@@ -376,7 +269,6 @@ def predict_market_tops_bottoms(data):
     # 确保数据包含所需指标
     required_columns = ['close', 'dif', 'dea', 'macd']
     rsi_col = 'rsi_14' if 'rsi_14' in data.columns else None
-    kdj_cols = ['k', 'd', 'j'] if all(col in data.columns for col in ['k', 'd', 'j']) else []
     
     missing_columns = [col for col in required_columns if col not in data.columns]
     if missing_columns:
@@ -411,41 +303,15 @@ def predict_market_tops_bottoms(data):
         # RSI顶部信号：RSI高于70且下降
         rsi_top = (data[rsi_col] > 70) & (data[rsi_col] < data[rsi_col].shift(1))
     
-    # KDJ信号
-    kdj_bottom = pd.Series(False, index=data.index)
-    kdj_top = pd.Series(False, index=data.index)
+    # 当MACD和RSI同时发出底部信号时，标记为潜在底部
+    result.loc[macd_bottom & rsi_bottom, 'prediction'] = 1  # 底部
     
-    if kdj_cols:
-        # KDJ底部信号：K线和D线都低于20且金叉
-        kdj_bottom = ((data['k'] < 20) & 
-                      (data['d'] < 20) & 
-                      (data['k'] > data['d']) & 
-                      (data['k'].shift(1) <= data['d'].shift(1)))
-        
-        # KDJ顶部信号：K线和D线都高于80且死叉
-        kdj_top = ((data['k'] > 80) & 
-                   (data['d'] > 80) & 
-                   (data['k'] < data['d']) & 
-                   (data['k'].shift(1) >= data['d'].shift(1)))
-    
-    # 综合信号
-    # 当至少两个指标同时发出底部信号时，标记为潜在底部
-    potential_bottom = ((macd_bottom & rsi_bottom) | 
-                        (macd_bottom & kdj_bottom) | 
-                        (rsi_bottom & kdj_bottom))
-    
-    # 当至少两个指标同时发出顶部信号时，标记为潜在顶部
-    potential_top = ((macd_top & rsi_top) | 
-                     (macd_top & kdj_top) | 
-                     (rsi_top & kdj_top))
-    
-    # 应用预测
-    result.loc[potential_bottom, 'prediction'] = 1  # 底部
-    result.loc[potential_top, 'prediction'] = -1    # 顶部
+    # 当MACD和RSI同时发出顶部信号时，标记为潜在顶部
+    result.loc[macd_top & rsi_top, 'prediction'] = -1  # 顶部
     
     return result
 
-def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None, days=90):
+def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None, days=90, save_fig=True, show_fig=False):
     """
     分析市场趋势并预测顶底
     
@@ -454,9 +320,11 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
         start_date (str): 开始日期，格式如'20230101'
         end_date (str): 结束日期，格式如'20231231'
         days (int): 如果未提供开始日期，则使用最近days天的数据
+        save_fig (bool): 是否保存图表到文件
+        show_fig (bool): 是否显示图表
         
     返回:
-        tuple: (pd.DataFrame, matplotlib.figure.Figure) 分析结果和图表
+        tuple: (pd.DataFrame, str) 分析结果和图表文件路径
     """
     from datetime import datetime, timedelta
     
@@ -484,6 +352,11 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
     # 获取市场数据及指标
     market_data = get_stock_indicators(market_code, start_date, end_date)
     
+    # 如果在线获取失败，尝试使用模拟数据
+    if market_data is None:
+        logger.warning("在线数据获取失败，使用模拟数据")
+        market_data = create_mock_data(start_date, end_date)
+    
     if market_data is None:
         logger.error(f"未能获取{market_code}从{start_date}到{end_date}的数据")
         return None, None
@@ -495,7 +368,7 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
     fig = plot_technical_indicators(market_data, title=f"{market_code} 技术指标分析")
     
     # 在收盘价图上标记预测的顶底
-    if prediction is not None and not prediction.empty:
+    if prediction is not None and not prediction.empty and fig is not None:
         ax = fig.axes[0]
         
         # 标记底部
@@ -510,139 +383,100 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
         
         ax.legend()
     
-    return prediction, fig
+    # 保存图表
+    fig_path = None
+    if save_fig and fig is not None:
+        fig_path = f'market_technical_analysis_{end_date}.png'
+        plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+        logger.info(f"技术分析图表已保存到: {fig_path}")
+    
+    # 显示图表
+    if show_fig and fig is not None:
+        plt.show()
+    else:
+        plt.close(fig)
+    
+    return prediction, fig_path
+
+def create_mock_data(start_date=None, end_date=None):
+    """
+    创建模拟数据集用于测试
+    
+    参数:
+        start_date (str): 开始日期，格式如'20230101'
+        end_date (str): 结束日期，格式如'20231231'
+        
+    返回:
+        pd.DataFrame: 包含模拟数据的DataFrame
+    """
+    logger.info("创建模拟数据集用于测试")
+    
+    # 解析日期
+    from datetime import datetime
+    if start_date and end_date:
+        start_dt = datetime.strptime(start_date, '%Y%m%d')
+        end_dt = datetime.strptime(end_date, '%Y%m%d')
+    else:
+        end_dt = datetime.now()
+        start_dt = datetime(end_dt.year, end_dt.month - 3, end_dt.day)
+    
+    # 生成日期范围
+    dates = pd.date_range(start=start_dt, end=end_dt, freq='B')
+    
+    # 生成示例价格数据
+    n = len(dates)
+    np.random.seed(42)  # 设置随机种子以保证可重复性
+    
+    # 生成收盘价
+    close = 3000 + np.cumsum(np.random.normal(0, 30, n))
+    # 确保价格在合理范围内
+    close = np.clip(close, 2800, 3600)
+    
+    # 生成开盘价、最高价、最低价
+    open_price = close + np.random.normal(0, 20, n)
+    high = np.maximum(close, open_price) + np.random.normal(10, 10, n)
+    low = np.minimum(close, open_price) - np.random.normal(10, 10, n)
+    
+    # 创建DataFrame
+    df = pd.DataFrame({
+        'open': open_price,
+        'high': high,
+        'low': low,
+        'close': close,
+        'vol': np.random.normal(3e8, 5e7, n),
+        'amount': np.random.normal(3.5e8, 5e7, n)
+    }, index=dates)
+    
+    # 计算技术指标
+    macd_data = calculate_macd(df)
+    rsi_data = calculate_rsi(df)
+    
+    # 合并数据
+    result = pd.concat([df, macd_data, rsi_data], axis=1)
+    return result
 
 if __name__ == "__main__":
     import datetime
-    import pandas as pd
-    import os
     
-    # 尝试从本地CSV文件读取数据作为备选
-    def try_local_data():
-        try:
-            # 首先尝试创建测试数据目录
-            if not os.path.exists('test_data'):
-                os.makedirs('test_data')
-                logger.info("创建了测试数据目录")
-            
-            # 本地测试数据文件路径
-            local_file = 'test_data/sh000001_daily.csv'
-            
-            # 如果本地有测试数据，直接使用
-            if os.path.exists(local_file):
-                logger.info(f"使用本地测试数据: {local_file}")
-                df = pd.read_csv(local_file)
-                df['trade_date'] = pd.to_datetime(df['trade_date'])
-                df.set_index('trade_date', inplace=True)
-                
-                # 如果数据不足，则使用所有可用数据
-                if len(df) < 120:
-                    logger.warning(f"本地数据仅有{len(df)}条记录，少于请求的120条")
-                
-                # 确保列名全部小写
-                df.columns = [col.lower() for col in df.columns]
-                
-                # 计算技术指标
-                macd_data = calculate_macd(df)
-                rsi_data = calculate_rsi(df)
-                kdj_data = calculate_kdj(df)
-                
-                # 合并数据
-                result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
-                
-                # 打印数据列，用于调试
-                logger.info(f"数据列: {list(result.columns)}")
-                logger.info(f"数据行数: {len(result)}")
-                
-                return result
-            else:
-                logger.warning(f"本地测试数据文件不存在: {local_file}")
-                return None
-        except Exception as e:
-            logger.error(f"读取本地数据出错: {str(e)}")
-            return None
+    # 测试函数
+    end_date = datetime.datetime.now().strftime('%Y%m%d')
+    prediction, fig_path = analyze_market_trend(
+        market_code='000001.SH',
+        days=90,
+        end_date=end_date,
+        save_fig=True,
+        show_fig=True
+    )
     
-    try:
-        # 使用固定历史日期数据，避免网络和未来日期问题
-        start_date = '20240924'
-        end_date = '20250327'
-        
-        logger.info(f"尝试获取 000001.SH 从 {start_date} 到 {end_date} 的数据")
-        
-        # 创建模拟数据集进行测试
-        def create_mock_data():
-            logger.info("创建模拟数据集用于测试")
-            # 生成日期范围
-            dates = pd.date_range(start='2024-09-24', end='2025-03-27', freq='B')
-            
-            # 生成示例价格数据
-            n = len(dates)
-            np.random.seed(42)  # 设置随机种子以保证可重复性
-            
-            # 生成收盘价
-            close = 3000 + np.cumsum(np.random.normal(0, 30, n))
-            # 确保价格在合理范围内
-            close = np.clip(close, 2800, 3600)
-            
-            # 生成开盘价、最高价、最低价
-            open_price = close + np.random.normal(0, 20, n)
-            high = np.maximum(close, open_price) + np.random.normal(10, 10, n)
-            low = np.minimum(close, open_price) - np.random.normal(10, 10, n)
-            
-            # 创建DataFrame
-            df = pd.DataFrame({
-                'open': open_price,
-                'high': high,
-                'low': low,
-                'close': close,
-                'vol': np.random.normal(3e8, 5e7, n),
-                'amount': np.random.normal(3.5e8, 5e7, n)
-            }, index=dates)
-            
-            # 计算技术指标
-            macd_data = calculate_macd(df)
-            rsi_data = calculate_rsi(df)
-            kdj_data = calculate_kdj(df)
-            
-            # 合并数据
-            result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
-            return result
-        
-        # 尝试在线获取数据
-        market_data = get_stock_indicators('000001.SH', start_date, end_date)
-        
-        # 如果在线获取失败，尝试使用本地数据
-        if market_data is None:
-            logger.warning("在线数据获取失败，尝试使用本地测试数据")
-            market_data = try_local_data()
-            
-            # 如果本地数据也不可用，使用模拟数据
-            if market_data is None:
-                logger.warning("本地数据不可用，使用模拟数据")
-                market_data = create_mock_data()
-        
-        if market_data is not None:
-            # 预测顶底
-            prediction = predict_market_tops_bottoms(market_data)
-            
-            # 生成图表
-            fig = plot_technical_indicators(market_data, title="上证指数技术指标分析")
-            
-            if fig:
-                plt.savefig('market_technical_analysis.png', dpi=300, bbox_inches='tight')
-                plt.show()
-            
-            if prediction is not None and not prediction.empty:
-                # 输出最近的预测
-                recent_predictions = prediction[prediction['prediction'] != 0].tail(5)
-                if not recent_predictions.empty:
-                    print("\n最近的市场顶底预测:")
-                    for idx, row in recent_predictions.iterrows():
-                        signal = "底部" if row['prediction'] == 1 else "顶部"
-                        print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']}, 预测: {signal}")
-                else:
-                    print("\n最近没有检测到明显的市场顶底信号")
+    if prediction is not None and not prediction.empty:
+        # 输出最近的预测
+        recent_predictions = prediction[prediction['prediction'] != 0].tail(5)
+        if not recent_predictions.empty:
+            print("\n最近的市场顶底预测:")
+            for idx, row in recent_predictions.iterrows():
+                signal = "底部" if row['prediction'] == 1 else "顶部"
+                print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']}, 预测: {signal}")
         else:
-            logger.error("无法获取数据，请检查网络连接或tushare TOKEN")
-    except Exception as e:
-        logger.error(f"运行分析时发生错误: {str(e)}") 
+            print("\n最近没有检测到明显的市场顶底信号")
+    
+    print(f"\n技术分析图表已保存到: {fig_path}") 

@@ -25,11 +25,16 @@
    - 计算过去20个交易日的数据，折线图展示
    - 比值小于1表示下跌家数多于上涨家数，市场整体偏弱
    - 比值大于2表示上涨家数远多于下跌家数，可能处于强势上涨中
-8. 自动生成PDF报告：整合所有分析结果成一份完整报告
+8. 技术指标分析：计算MACD、RSI等技术指标，预测市场顶部和底部
+   - 基于上证指数计算各项技术指标
+   - 生成技术指标图表，用于判断市场趋势
+9. 自动生成PDF报告：整合所有分析结果成一份完整报告
+10. 清理临时文件：报告生成后清理过程中生成的图片文件
 """
 
 import os
 import sys
+import glob
 from datetime import datetime
 import matplotlib.pyplot as plt
 import tushare as ts
@@ -43,6 +48,8 @@ from analyze_capital_concentration import analyze_capital_concentration
 from create_pdf_report import create_pdf_report
 # 导入上涨/下跌比值分析功能
 from get_market_up_down_stocks import analyze_up_down_ratio
+# 导入技术指标分析模块
+from market_technical_indicators import analyze_market_trend
 
 def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, token=None, days=20):
     """
@@ -83,7 +90,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
         end_date = date
     
     # 1. 生成大盘指数表现图
-    print("\n[1/6] 正在生成市场指数表现图...")
+    print("\n[1/7] 正在生成市场指数表现图...")
     
     # 定义指数名称字典
     index_names = {
@@ -101,14 +108,14 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"市场指数表现图生成完成")
     
     # 2. 生成行业资金流向图
-    print("\n[2/6] 正在生成行业资金流向图...")
+    print("\n[2/7] 正在生成行业资金流向图...")
     df_industry = plot_industry_moneyflow(token=token, date=end_date, top_n=10, save_fig=True, show_fig=False)
     print(f"行业资金流向图生成完成")
     
     # 注释掉热点行业个股分析部分
     """
     # 3. 生成热点行业个股分析图
-    print("\n[3/6] 正在分析热点行业个股资金流向...")
+    print("\n[3/7] 正在分析热点行业个股资金流向...")
     # 通过以下步骤实现：
     # - 获取行业资金流向数据，获取净流入最高的行业及其ts_code
     # - 使用指数成分和权重API获取行业成分股列表
@@ -123,7 +130,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     """
     
     # 3. 分析全市场个股资金净流入情况
-    print("\n[3/6] 正在分析全市场个股资金净流入情况...")
+    print("\n[3/7] 正在分析全市场个股资金净流入情况...")
     # 只获取资金净流入排行，不再获取资金净流入率排行
     net_inflow_top, _ = analyze_market_moneyflow(token=token, date=end_date, 
                                             top_n=top_stock_count, 
@@ -133,7 +140,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"全市场个股资金净流入分析完成")
     
     # 4. 分析量价背离指数
-    print("\n[4/6] 正在分析量价背离指数...")
+    print("\n[4/7] 正在分析量价背离指数...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的量价背离指数
     # - 绘制折线图展示结果
@@ -144,7 +151,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"量价背离指数分析完成")
     
     # 5. 分析资金集中度指标
-    print("\n[5/6] 正在分析资金集中度指标...")
+    print("\n[5/7] 正在分析资金集中度指标...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的资金集中度指标
     # - 绘制折线图展示结果
@@ -155,7 +162,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"资金集中度指标分析完成")
     
     # 6. 分析上涨/下跌股票比值
-    print("\n[6/6] 正在分析上涨/下跌股票比值...")
+    print("\n[6/7] 正在分析上涨/下跌股票比值...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的上涨/下跌股票比值
     # - 绘制折线图展示结果
@@ -164,7 +171,20 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"上涨/下跌股票比值分析完成")
     
-    # 7. 生成PDF报告
+    # 7. 生成技术指标分析图
+    print("\n[7/7] 正在分析技术指标...")
+    # 分析市场趋势并生成技术指标图表
+    tech_prediction, tech_fig_path = analyze_market_trend(
+        market_code='000001.SH',   # 分析上证指数
+        days=90,                  # 分析最近90天数据
+        end_date=end_date,        # 使用指定结束日期
+        save_fig=True,            # 保存图表
+        show_fig=False            # 不显示图表
+    )
+    
+    print(f"技术指标分析完成")
+    
+    # 8. 生成PDF报告
     print("\n正在生成PDF报告...")
     report_filename = f"Stock_Market_Monitor_{end_date}.pdf"
     # 创建reports目录（如果不存在）
@@ -176,6 +196,10 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     report_path = os.path.join(reports_dir, report_filename)
     create_pdf_report(output_filename=report_path)
     
+    # 9. 清理临时图片文件
+    print("\n清理临时图片文件...")
+    clean_temp_files(end_date)
+    
     end_time = datetime.now()
     duration = end_time - start_time
     print(f"\n报告生成完成!")
@@ -184,6 +208,42 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"报告文件: {os.path.abspath(report_path)}")
     
     return report_path
+
+def clean_temp_files(current_date):
+    """
+    清理生成报告过程中产生的临时图片文件
+    
+    参数:
+    current_date: 当前日期，格式为'YYYYMMDD'，用于保留当前日期的PDF报告
+    """
+    try:
+        # 删除所有PNG文件
+        png_files = glob.glob("*.png")
+        for file in png_files:
+            try:
+                os.remove(file)
+                print(f"已删除临时文件: {file}")
+            except Exception as e:
+                print(f"删除文件 {file} 时出错: {str(e)}")
+        
+        # 删除根目录下旧的PDF文件，但保留当前日期的和reports目录中的文件
+        pdf_files = glob.glob("*.pdf")
+        current_report = f"Stock_Market_Monitor_{current_date}.pdf"
+        
+        for file in pdf_files:
+            # 跳过当前日期的报告
+            if file == current_report:
+                continue
+                
+            try:
+                os.remove(file)
+                print(f"已删除旧报告: {file}")
+            except Exception as e:
+                print(f"删除文件 {file} 时出错: {str(e)}")
+                
+        print("临时文件清理完成")
+    except Exception as e:
+        print(f"清理临时文件时发生错误: {str(e)}")
 
 def main():
     """
@@ -201,7 +261,7 @@ def main():
     args = parser.parse_args()
     
     # 生成报告
-    generate_market_report(date='20250326', 
+    generate_market_report(date=args.date, 
                          top_industry_count=args.industries, 
                          top_stock_count=args.stocks,
                          token=args.token,
