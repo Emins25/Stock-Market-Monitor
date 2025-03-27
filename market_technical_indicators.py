@@ -485,26 +485,83 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
 
 if __name__ == "__main__":
     import datetime
+    import pandas as pd
+    import os
     
-    # 使用最新数据，计算过去120天的数据
-    today = datetime.datetime.now()
-    end_date = today.strftime('%Y%m%d')
-    start_date = (today - datetime.timedelta(days=120)).strftime('%Y%m%d')
+    # 尝试从本地CSV文件读取数据作为备选
+    def try_local_data():
+        try:
+            # 首先尝试创建测试数据目录
+            if not os.path.exists('test_data'):
+                os.makedirs('test_data')
+                logger.info("创建了测试数据目录")
+            
+            # 本地测试数据文件路径
+            local_file = 'test_data/sh000001_daily.csv'
+            
+            # 如果本地有测试数据，直接使用
+            if os.path.exists(local_file):
+                logger.info(f"使用本地测试数据: {local_file}")
+                df = pd.read_csv(local_file)
+                df['trade_date'] = pd.to_datetime(df['trade_date'])
+                df.set_index('trade_date', inplace=True)
+                
+                # 如果数据不足，则使用所有可用数据
+                if len(df) < 120:
+                    logger.warning(f"本地数据仅有{len(df)}条记录，少于请求的120条")
+                
+                # 计算技术指标
+                macd_data = calculate_macd(df)
+                rsi_data = calculate_rsi(df)
+                kdj_data = calculate_kdj(df)
+                
+                # 合并数据
+                result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
+                return result
+            else:
+                logger.warning(f"本地测试数据文件不存在: {local_file}")
+                return None
+        except Exception as e:
+            logger.error(f"读取本地数据出错: {str(e)}")
+            return None
     
-    # 示例：分析上证指数
-    prediction, fig = analyze_market_trend(market_code='000001.SH', start_date=start_date, end_date=end_date)
-    
-    if fig:
-        plt.savefig('market_technical_analysis.png', dpi=300, bbox_inches='tight')
-        plt.show()
-    
-    if prediction is not None and not prediction.empty:
-        # 输出最近的预测
-        recent_predictions = prediction[prediction['prediction'] != 0].tail(5)
-        if not recent_predictions.empty:
-            print("\n最近的市场顶底预测:")
-            for idx, row in recent_predictions.iterrows():
-                signal = "底部" if row['prediction'] == 1 else "顶部"
-                print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']}, 预测: {signal}")
+    try:
+        # 使用固定历史日期数据，避免网络和未来日期问题
+        start_date = '20220101'
+        end_date = '20220601'
+        
+        logger.info(f"尝试获取 000001.SH 从 {start_date} 到 {end_date} 的数据")
+        
+        # 尝试在线获取数据
+        market_data = get_stock_indicators('000001.SH', start_date, end_date)
+        
+        # 如果在线获取失败，尝试使用本地数据
+        if market_data is None:
+            logger.warning("在线数据获取失败，尝试使用本地测试数据")
+            market_data = try_local_data()
+        
+        if market_data is not None:
+            # 预测顶底
+            prediction = predict_market_tops_bottoms(market_data)
+            
+            # 生成图表
+            fig = plot_technical_indicators(market_data, title="上证指数技术指标分析")
+            
+            if fig:
+                plt.savefig('market_technical_analysis.png', dpi=300, bbox_inches='tight')
+                plt.show()
+            
+            if prediction is not None and not prediction.empty:
+                # 输出最近的预测
+                recent_predictions = prediction[prediction['prediction'] != 0].tail(5)
+                if not recent_predictions.empty:
+                    print("\n最近的市场顶底预测:")
+                    for idx, row in recent_predictions.iterrows():
+                        signal = "底部" if row['prediction'] == 1 else "顶部"
+                        print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']}, 预测: {signal}")
+                else:
+                    print("\n最近没有检测到明显的市场顶底信号")
         else:
-            print("\n最近没有检测到明显的市场顶底信号") 
+            logger.error("无法获取数据，请检查网络连接或tushare TOKEN")
+    except Exception as e:
+        logger.error(f"运行分析时发生错误: {str(e)}") 
