@@ -256,7 +256,7 @@ def get_industry_stocks(pro, industry_code, trade_date=None, retries=3, retry_de
                 df = get_data_with_retry(pro.ths_member, ts_code=industry_code)
                 
                 if not df.empty:
-                    stock_list = df['code'].tolist()
+                    stock_list = df['ts_code'].tolist()
                     print(f"通过ths_member成功获取到 {len(stock_list)} 支成分股")
                     return stock_list
                 
