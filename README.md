@@ -24,8 +24,7 @@
 计算过去20个交易日的数据
 每个交易日拉取所有股票的当日资金净流入数据，对10%求和同时对整体求和，计算前10%占总体的比例
 将过去20个交易的数据画折线图展示
-
-5. **自动生成PDF报告**：将所有分析结果整合成一份专业的PDF格式报告
+7. **自动生成PDF报告**：将所有分析结果整合成一份专业的PDF格式报告
 
 ## 技术栈
 
@@ -34,6 +33,27 @@
 - **Pandas**：数据处理与分析
 - **Matplotlib**：数据可视化
 - **ReportLab**：PDF报告生成
+
+## 系统优化
+
+系统针对以下方面进行了优化:
+
+1. **数据获取稳定性**：
+   - 增强了API请求重试机制，使用指数退避策略，更有效地处理网络波动
+   - 引入了健壮的错误处理逻辑，确保在API调用失败时能够优雅降级
+
+2. **数据处理可靠性**：
+   - 改进了缺失值和异常值处理逻辑，提高数据分析质量
+   - 增强了资金流入率计算，避免除零错误和无穷大值
+   - 添加了更完善的数据验证步骤，确保后续分析的可靠性
+
+3. **智能日期管理**：
+   - 新增自动获取最近交易日功能，减少用户手动输入错误
+   - 优化了非交易日处理逻辑，自动切换到最近有效交易日
+
+4. **结果展示优化**：
+   - 改进了图表保存功能，提供完整文件路径提示
+   - 增强图表比例和布局，更符合金融数据展示需求
 
 ## 安装说明
 
@@ -44,7 +64,7 @@
 
 2. 安装所需依赖：
    ```
-   pip install tushare pandas matplotlib reportlab
+   pip install tushare pandas matplotlib reportlab requests numpy
    ```
 
 3. 获取Tushare API Token：
@@ -83,20 +103,53 @@ python plot_industry_moneyflow.py
 python analyze_top_industry_stocks.py
 ```
 
+### 单独分析全市场资金流向
+
+```
+python analyze_market_moneyflow.py
+```
+
+### 分析量价背离指数
+
+```
+python analyze_price_volume_divergence.py
+```
+
+### 分析资金集中度指标
+
+```
+python analyze_capital_concentration.py
+```
+
 ## 输出文件
 
 - **[日期]_index_performance.png**：市场指数表现图
 - **[日期]_industry_moneyflow_top_bottom.png**：行业资金流向图
 - **[日期]_industry_[行业名称]_stocks.png**：热点行业个股资金流向图
+- **market_net_inflow_top_[日期].png**：全市场资金净流入排行图
+- **market_inflow_rate_top_[日期].png**：全市场资金流入率排行图
+- **price_volume_divergence_[日期].png**：量价背离指数趋势图
+- **capital_concentration_[日期].png**：资金集中度指标趋势图
 - **Stock_Market_Monitor_[日期].pdf**：完整的市场分析PDF报告
 
-## 示例输出
+## 最新改进
 
-系统将生成类似以下命名的文件：
-- `index_performance_20250325.png`
-- `industry_moneyflow_top_bottom_20250325.png`
-- `industry_医药制造_stocks_20250325.png`
-- `Stock_Market_Monitor_20250325.pdf`
+最近的更新主要集中在以下方面：
+
+1. **全面优化数据获取机制**：
+   - 完善了行业成分股获取逻辑，提高成功率和数据完整性
+   - 改进指数数据和行业资金流向数据的获取方式
+   - 优化批量处理股票数据的效率
+
+2. **增强错误恢复能力**：
+   - 细化API调用异常处理流程
+   - 针对不同类型的网络错误实现不同的恢复策略
+   - 加强运行时异常处理，提升系统稳定性
+
+3. **改进数据呈现方式**：
+   - 优化图表显示效果，提高可读性
+   - 完善数据标签和比例尺，使图表更加直观
+   - 增强路径显示，方便用户找到生成的文件
 
 ## 联系与支持
 
