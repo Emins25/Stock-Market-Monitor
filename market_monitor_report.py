@@ -175,7 +175,7 @@ def main():
     args = parser.parse_args()
     
     # 生成报告
-    generate_market_report(date=args.date, 
+    generate_market_report(date='20250326', 
                          top_industry_count=args.industries, 
                          top_stock_count=args.stocks,
                          token=args.token,

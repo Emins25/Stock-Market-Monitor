@@ -24,33 +24,69 @@ import os
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置默认字体为黑体
 plt.rcParams['axes.unicode_minus'] = False  # 解决保存图像时负号'-'显示为方块的问题
 
-def get_data_with_retry(func, max_retries=5, **kwargs):
+def get_data_with_retry(func, max_retries=5, retry_delay=2, extended_wait=True, **kwargs):
     """
     带有重试机制的数据获取函数
     
     参数:
     func: 要调用的函数
     max_retries: 最大重试次数
+    retry_delay: 初始重试延迟(秒)
+    extended_wait: 是否在多次重试失败后启用长时间等待再尝试
     kwargs: 传递给func的参数
     
     返回:
     func的返回结果或空DataFrame
     """
-    retry_delay = 2  # 初始延迟2秒
-    
     for attempt in range(max_retries):
         try:
-            return func(**kwargs)
+            result = func(**kwargs)
+            # 检查结果是否为空DataFrame
+            if isinstance(result, pd.DataFrame) and result.empty:
+                if attempt == max_retries - 1:
+                    if extended_wait:
+                        # 如果所有重试都失败且启用了长时间等待，则等待1分钟后再试一次
+                        print(f"尝试{max_retries}次后获取到空数据，等待60秒后进行最后一次尝试...")
+                        time.sleep(60)  # 等待1分钟
+                        try:
+                            result = func(**kwargs)
+                            if not (isinstance(result, pd.DataFrame) and result.empty):
+                                print("在额外等待后成功获取数据")
+                                return result
+                        except Exception as e:
+                            print(f"额外等待后尝试仍然失败: {e}")
+                    
+                    print(f"尝试{max_retries}次后获取到空数据")
+                    return pd.DataFrame()
+                    
+                print(f"第{attempt+1}次请求返回空数据，{retry_delay:.1f}秒后重试...")
+                time.sleep(retry_delay)
+                retry_delay *= 1.5  # 指数退避策略
+                continue
+            
+            return result
         except (requests.exceptions.ChunkedEncodingError, 
                 requests.exceptions.ConnectionError,
-                requests.exceptions.Timeout) as e:
+                requests.exceptions.Timeout,
+                Exception) as e:
             if attempt == max_retries - 1:
+                if extended_wait:
+                    # 如果所有重试都失败且启用了长时间等待，则等待1分钟后再试一次
+                    print(f"尝试{max_retries}次后仍然失败，等待60秒后进行最后一次尝试...")
+                    time.sleep(60)  # 等待1分钟
+                    try:
+                        result = func(**kwargs)
+                        print("在额外等待后成功获取数据")
+                        return result
+                    except Exception as e:
+                        print(f"额外等待后尝试仍然失败: {e}")
+                
                 print(f"尝试{max_retries}次后仍然失败: {e}")
                 return pd.DataFrame()
                 
-            print(f"第{attempt+1}次请求失败: {e}，{retry_delay}秒后重试...")
+            print(f"第{attempt+1}次请求失败: {e}，{retry_delay:.1f}秒后重试...")
             time.sleep(retry_delay)
-            retry_delay *= 1.5  # 指数退避策略，增加重试间隔
+            retry_delay *= 1.5  # 指数退避策略
     
     return pd.DataFrame()
 
