@@ -13,7 +13,10 @@
    - 使用指数成分和权重API获取对应成分股列表(con_code)
    - 使用个股资金流向(THS)API获取每支股票的单日资金净流入数据
    - 按净流入金额排序后，取前十名绘制柱状图
-4. 自动生成PDF报告：整合所有分析结果成一份完整报告
+4. 全市场个股资金净流入分析：分析全市场资金净流入最高的股票
+   - 拉取全市场个股的当日资金净流入数据，排序后取前十名，柱状图展示
+   - 计算全市场每个股票的资金流入率=(资金净流入/当日成交额)*100%，排序后取最高的前十名，柱状图展示
+5. 自动生成PDF报告：整合所有分析结果成一份完整报告
 """
 
 import os
@@ -24,6 +27,7 @@ import tushare as ts
 from plot_index_performance import plot_index_performance
 from plot_industry_moneyflow import plot_industry_moneyflow
 from analyze_top_industry_stocks import get_top_stocks_by_industry
+from analyze_market_moneyflow import analyze_market_moneyflow
 from create_pdf_report import create_pdf_report
 
 def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, token=None):
@@ -56,14 +60,14 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     start_time = datetime.now()
     print(f"\n开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     
-    # 1. 生成大盘指数表现图
-    print("\n[1/3] 正在生成市场指数表现图...")
-    
     # 获取日期范围
     if date is None:
         end_date = datetime.now().strftime('%Y%m%d')
     else:
         end_date = date
+    
+    # 1. 生成大盘指数表现图
+    print("\n[1/4] 正在生成市场指数表现图...")
     
     # 定义指数名称字典
     index_names = {
@@ -81,25 +85,37 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"市场指数表现图生成完成")
     
     # 2. 生成行业资金流向图
-    print("\n[2/3] 正在生成行业资金流向图...")
-    df_industry = plot_industry_moneyflow(token=token, date=date, top_n=10, save_fig=True, show_fig=False)
+    print("\n[2/4] 正在生成行业资金流向图...")
+    df_industry = plot_industry_moneyflow(token=token, date=end_date, top_n=10, save_fig=True, show_fig=False)
     print(f"行业资金流向图生成完成")
     
     # 3. 生成热点行业个股分析图
-    print("\n[3/3] 正在分析热点行业个股资金流向...")
+    print("\n[3/4] 正在分析热点行业个股资金流向...")
     # 通过以下步骤实现：
     # - 获取行业资金流向数据，获取净流入最高的行业及其ts_code
     # - 使用指数成分和权重API获取行业成分股列表
     # - 使用个股资金流向(THS)API获取每支股票的资金净流入数据
     # - 排序后取前N名，生成柱状图
-    industry_stocks = get_top_stocks_by_industry(token=token, date=date, 
+    industry_stocks = get_top_stocks_by_industry(token=token, date=end_date, 
                                               top_industry_count=top_industry_count, 
                                               top_stock_count=top_stock_count,
                                               save_fig=True, show_fig=False)
     
     print(f"热点行业个股分析完成")
     
-    # 4. 生成PDF报告
+    # 4. 分析全市场个股资金净流入情况
+    print("\n[4/4] 正在分析全市场个股资金净流入情况...")
+    # 通过以下步骤实现：
+    # - 拉取全市场个股的当日资金净流入数据
+    # - 分别按净流入金额和流入率排序，取前10名
+    # - 生成两张柱状图
+    net_inflow_top, inflow_rate_top = analyze_market_moneyflow(token=token, date=end_date, 
+                                                            top_n=top_stock_count, 
+                                                            save_fig=True, show_fig=False)
+    
+    print(f"全市场个股资金净流入分析完成")
+    
+    # 5. 生成PDF报告
     print("\n正在生成PDF报告...")
     report_filename = f"Stock_Market_Monitor_{end_date}.pdf"
     create_pdf_report(output_filename=report_filename)
