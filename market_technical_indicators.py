@@ -189,10 +189,10 @@ def get_indicator_signals(data, indicators):
 
 def get_stock_indicators(ts_code, start_date, end_date):
     """
-    获取股票的技术指标数据
+    获取股票或指数的技术指标数据
     
     参数:
-        ts_code (str): 股票代码，格式如'000001.SZ'
+        ts_code (str): 股票或指数代码，格式如'000001.SZ'（股票）或'000001.SH'（指数）
         start_date (str): 开始日期，格式如'20230101'
         end_date (str): 结束日期，格式如'20231231'
         
@@ -200,8 +200,17 @@ def get_stock_indicators(ts_code, start_date, end_date):
         pd.DataFrame: 包含价格和技术指标的DataFrame
     """
     try:
+        # 根据代码判断是否为指数
+        is_index = ts_code.endswith('.SH') and ts_code.startswith('0') or ts_code.endswith('.SZ') and ts_code.startswith('39')
+        
         # 获取日线数据
-        df = pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+        if is_index:
+            logger.info(f"获取指数 {ts_code} 的日线数据，使用index_daily接口")
+            df = pro.index_daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+        else:
+            logger.info(f"获取个股 {ts_code} 的日线数据，使用daily接口")
+            df = pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+        
         df = df.sort_values('trade_date')
         
         if df.empty:
