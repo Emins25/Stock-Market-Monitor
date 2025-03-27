@@ -12,6 +12,7 @@ import tushare as ts
 import logging
 import os
 import sys
+import time
 
 # 配置日志
 logging.basicConfig(
@@ -199,37 +200,50 @@ def get_stock_indicators(ts_code, start_date, end_date):
     返回:
         pd.DataFrame: 包含价格和技术指标的DataFrame
     """
-    try:
-        # 根据代码判断是否为指数
-        is_index = ts_code.endswith('.SH') and ts_code.startswith('0') or ts_code.endswith('.SZ') and ts_code.startswith('39')
-        
-        # 获取日线数据
-        if is_index:
-            logger.info(f"获取指数 {ts_code} 的日线数据，使用index_daily接口")
-            df = pro.index_daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
-        else:
-            logger.info(f"获取个股 {ts_code} 的日线数据，使用daily接口")
-            df = pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
-        
-        df = df.sort_values('trade_date')
-        
-        if df.empty:
-            logger.warning(f"未获取到{ts_code}的数据")
-            return None
-        
-        # 计算技术指标
-        macd_data = calculate_macd(df)
-        rsi_data = calculate_rsi(df)
-        kdj_data = calculate_kdj(df)
-        
-        # 合并数据
-        result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
-        
-        return result
+    max_retries = 3
+    retry_delay = 2  # 初始延迟时间（秒）
     
-    except Exception as e:
-        logger.error(f"获取{ts_code}技术指标时出错: {str(e)}")
-        return None
+    for retry in range(max_retries):
+        try:
+            # 根据代码判断是否为指数
+            is_index = (ts_code.endswith('.SH') and ts_code.startswith('0')) or (ts_code.endswith('.SZ') and ts_code.startswith('39'))
+            
+            # 获取日线数据
+            if is_index:
+                logger.info(f"获取指数 {ts_code} 的日线数据，使用index_daily接口")
+                df = pro.index_daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            else:
+                logger.info(f"获取个股 {ts_code} 的日线数据，使用daily接口")
+                df = pro.daily(ts_code=ts_code, start_date=start_date, end_date=end_date)
+            
+            if df is None or df.empty:
+                logger.warning(f"未获取到{ts_code}的数据")
+                return None
+            
+            df = df.sort_values('trade_date')
+            
+            # 将trade_date设置为索引
+            df['trade_date'] = pd.to_datetime(df['trade_date'])
+            df.set_index('trade_date', inplace=True)
+            
+            # 计算技术指标
+            macd_data = calculate_macd(df)
+            rsi_data = calculate_rsi(df)
+            kdj_data = calculate_kdj(df)
+            
+            # 合并数据
+            result = pd.concat([df, macd_data, rsi_data, kdj_data], axis=1)
+            
+            return result
+        
+        except Exception as e:
+            if retry < max_retries - 1:
+                logger.warning(f"获取{ts_code}数据出错（尝试 {retry+1}/{max_retries}）: {str(e)}，将在{retry_delay}秒后重试")
+                time.sleep(retry_delay)
+                retry_delay *= 2  # 指数退避策略
+            else:
+                logger.error(f"获取{ts_code}技术指标时出错: {str(e)}")
+                return None
 
 def plot_technical_indicators(data, title=None):
     """
@@ -398,15 +412,26 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
     """
     from datetime import datetime, timedelta
     
+    # 使用实际当前日期，而非可能出现的未来日期
+    current_date = datetime.now()
+    
     # 如果未提供结束日期，使用当前日期
     if end_date is None:
-        end_date = datetime.now().strftime('%Y%m%d')
+        end_date = current_date.strftime('%Y%m%d')
+    else:
+        # 确保结束日期不超过当前日期
+        end_dt = datetime.strptime(end_date, '%Y%m%d')
+        if end_dt > current_date:
+            end_date = current_date.strftime('%Y%m%d')
+            logger.warning(f"结束日期超过当前日期，已调整为当前日期: {end_date}")
     
     # 如果未提供开始日期，使用结束日期前days天
     if start_date is None:
         end_dt = datetime.strptime(end_date, '%Y%m%d')
         start_dt = end_dt - timedelta(days=days)
         start_date = start_dt.strftime('%Y%m%d')
+    
+    logger.info(f"获取 {market_code} 从 {start_date} 到 {end_date} 的数据")
     
     # 获取市场数据及指标
     market_data = get_stock_indicators(market_code, start_date, end_date)
@@ -441,7 +466,8 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
 
 if __name__ == "__main__":
     # 示例：分析上证指数最近90天的数据
-    prediction, fig = analyze_market_trend(market_code='000001.SH', days=90)
+    # 使用2022年的数据进行测试，避免未来日期问题
+    prediction, fig = analyze_market_trend(market_code='000001.SH', start_date='20220101', end_date='20220601')
     
     if fig:
         plt.savefig('market_technical_analysis.png', dpi=300, bbox_inches='tight')
@@ -454,6 +480,6 @@ if __name__ == "__main__":
             print("最近的市场顶底预测:")
             for idx, row in recent_predictions.iterrows():
                 signal = "底部" if row['prediction'] == 1 else "顶部"
-                print(f"日期: {idx}, 收盘价: {row['close']}, 预测: {signal}")
+                print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']}, 预测: {signal}")
         else:
             print("最近没有检测到明显的市场顶底信号") 
