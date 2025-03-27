@@ -257,23 +257,29 @@ def plot_technical_indicators(data, title=None):
         logger.warning("没有数据可供绘图")
         return
     
+    # 使用中文字体
+    plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']  # 优先使用的中文字体
+    plt.rcParams['axes.unicode_minus'] = False  # 解决负号显示问题
+    
     fig = plt.figure(figsize=(14, 12))
     
     # 绘制K线图
     ax1 = plt.subplot2grid((4, 1), (0, 0), rowspan=1)
     ax1.plot(data.index, data['close'], 'b-', label='收盘价')
     ax1.set_title(title or "技术指标分析")
-    ax1.legend()
+    ax1.legend(loc='upper right')
+    ax1.grid(True, linestyle='--', alpha=0.3)
     
     # 绘制MACD
     if all(col in data.columns for col in ['dif', 'dea', 'macd']):
         ax2 = plt.subplot2grid((4, 1), (1, 0), rowspan=1, sharex=ax1)
         ax2.plot(data.index, data['dif'], 'r-', label='DIF')
         ax2.plot(data.index, data['dea'], 'g-', label='DEA')
-        ax2.bar(data.index, data['macd'], color='b', label='MACD')
+        ax2.bar(data.index, data['macd'], color='blue', label='MACD')
         ax2.axhline(y=0, color='k', linestyle='-', alpha=0.3)
         ax2.set_title("MACD指标")
-        ax2.legend()
+        ax2.legend(loc='upper right')
+        ax2.grid(True, linestyle='--', alpha=0.3)
     
     # 绘制RSI
     rsi_cols = [col for col in data.columns if col.startswith('rsi_')]
@@ -290,7 +296,18 @@ def plot_technical_indicators(data, title=None):
         
         ax3.set_title("RSI指标")
         ax3.set_ylim(0, 100)
-        ax3.legend()
+        ax3.legend(loc='upper right')
+        ax3.grid(True, linestyle='--', alpha=0.3)
+    
+    # 重新计算KDJ（确保有值）
+    try:
+        # 当KDJ没有值或值全为NaN时，尝试重新计算
+        if 'k' not in data.columns or data['k'].isna().all():
+            logger.info("重新计算KDJ指标")
+            kdj_data = calculate_kdj(data)
+            data = pd.concat([data, kdj_data], axis=1)
+    except Exception as e:
+        logger.warning(f"重新计算KDJ时出错: {str(e)}")
     
     # 绘制KDJ
     if all(col in data.columns for col in ['k', 'd', 'j']):
@@ -306,7 +323,9 @@ def plot_technical_indicators(data, title=None):
         ax4.fill_between(data.index, 80, 100, color='r', alpha=0.1)
         
         ax4.set_title("KDJ指标")
-        ax4.legend()
+        ax4.set_ylim(0, 100)  # 设置固定的y轴范围
+        ax4.legend(loc='upper right')
+        ax4.grid(True, linestyle='--', alpha=0.3)
     
     plt.tight_layout()
     return fig
@@ -465,9 +484,15 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
     return prediction, fig
 
 if __name__ == "__main__":
-    # 示例：分析上证指数最近90天的数据
-    # 使用2022年的数据进行测试，避免未来日期问题
-    prediction, fig = analyze_market_trend(market_code='000001.SH', start_date='20220101', end_date='20220601')
+    import datetime
+    
+    # 使用最新数据，计算过去120天的数据
+    today = datetime.datetime.now()
+    end_date = today.strftime('%Y%m%d')
+    start_date = (today - datetime.timedelta(days=120)).strftime('%Y%m%d')
+    
+    # 示例：分析上证指数
+    prediction, fig = analyze_market_trend(market_code='000001.SH', start_date=start_date, end_date=end_date)
     
     if fig:
         plt.savefig('market_technical_analysis.png', dpi=300, bbox_inches='tight')
@@ -477,9 +502,9 @@ if __name__ == "__main__":
         # 输出最近的预测
         recent_predictions = prediction[prediction['prediction'] != 0].tail(5)
         if not recent_predictions.empty:
-            print("最近的市场顶底预测:")
+            print("\n最近的市场顶底预测:")
             for idx, row in recent_predictions.iterrows():
                 signal = "底部" if row['prediction'] == 1 else "顶部"
                 print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']}, 预测: {signal}")
         else:
-            print("最近没有检测到明显的市场顶底信号") 
+            print("\n最近没有检测到明显的市场顶底信号") 
