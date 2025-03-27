@@ -22,7 +22,11 @@
 6. 资金集中度指标：前10%个股的资金净流入占全市场比例
    - 计算过去20个交易日的数据，折线图展示
    - 集中度越高说明市场情绪越分化
-7. 自动生成PDF报告：整合所有分析结果成一份完整报告
+7. 上涨/下跌股票比值：计算市场上涨股票数与下跌股票数的比值
+   - 计算过去20个交易日的数据，折线图展示
+   - 比值小于1表示下跌家数多于上涨家数，市场整体偏弱
+   - 比值大于2表示上涨家数远多于下跌家数，可能处于强势上涨中
+8. 自动生成PDF报告：整合所有分析结果成一份完整报告
 """
 
 import os
@@ -38,6 +42,8 @@ from analyze_market_moneyflow import analyze_market_moneyflow
 from analyze_price_volume_divergence import analyze_price_volume_divergence
 from analyze_capital_concentration import analyze_capital_concentration
 from create_pdf_report import create_pdf_report
+# 导入上涨/下跌比值分析功能
+from get_market_up_down_stocks import analyze_up_down_ratio
 
 def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, token=None, days=20):
     """
@@ -78,7 +84,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
         end_date = date
     
     # 1. 生成大盘指数表现图
-    print("\n[1/5] 正在生成市场指数表现图...")
+    print("\n[1/6] 正在生成市场指数表现图...")
     
     # 定义指数名称字典
     index_names = {
@@ -96,7 +102,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"市场指数表现图生成完成")
     
     # 2. 生成行业资金流向图
-    print("\n[2/5] 正在生成行业资金流向图...")
+    print("\n[2/6] 正在生成行业资金流向图...")
     df_industry = plot_industry_moneyflow(token=token, date=end_date, top_n=10, save_fig=True, show_fig=False)
     print(f"行业资金流向图生成完成")
     
@@ -118,7 +124,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     """
     
     # 3. 分析全市场个股资金净流入情况
-    print("\n[3/5] 正在分析全市场个股资金净流入情况...")
+    print("\n[3/6] 正在分析全市场个股资金净流入情况...")
     # 通过以下步骤实现：
     # - 拉取全市场个股的当日资金净流入数据
     # - 分别按净流入金额和流入率排序，取前10名
@@ -130,7 +136,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"全市场个股资金净流入分析完成")
     
     # 4. 分析量价背离指数
-    print("\n[4/5] 正在分析量价背离指数...")
+    print("\n[4/6] 正在分析量价背离指数...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的量价背离指数
     # - 绘制折线图展示结果
@@ -141,7 +147,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"量价背离指数分析完成")
     
     # 5. 分析资金集中度指标
-    print("\n[5/5] 正在分析资金集中度指标...")
+    print("\n[5/6] 正在分析资金集中度指标...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的资金集中度指标
     # - 绘制折线图展示结果
@@ -151,19 +157,36 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"资金集中度指标分析完成")
     
-    # 6. 生成PDF报告
+    # 6. 分析上涨/下跌股票比值
+    print("\n[6/6] 正在分析上涨/下跌股票比值...")
+    # 通过以下步骤实现：
+    # - 计算过去N个交易日的上涨/下跌股票比值
+    # - 绘制折线图展示结果
+    df_ratio = analyze_up_down_ratio(end_date=end_date, days=days, 
+                                 token=token, save_fig=True, show_fig=False)
+    
+    print(f"上涨/下跌股票比值分析完成")
+    
+    # 7. 生成PDF报告
     print("\n正在生成PDF报告...")
     report_filename = f"Stock_Market_Monitor_{end_date}.pdf"
-    create_pdf_report(output_filename=report_filename)
+    # 创建reports目录（如果不存在）
+    reports_dir = "reports"
+    if not os.path.exists(reports_dir):
+        os.makedirs(reports_dir)
+    
+    # 在reports目录下生成报告
+    report_path = os.path.join(reports_dir, report_filename)
+    create_pdf_report(output_filename=report_path)
     
     end_time = datetime.now()
     duration = end_time - start_time
     print(f"\n报告生成完成!")
     print(f"结束时间: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"总耗时: {duration.total_seconds():.2f} 秒")
-    print(f"报告文件: {os.path.abspath(report_filename)}")
+    print(f"报告文件: {os.path.abspath(report_path)}")
     
-    return report_filename
+    return report_path
 
 def main():
     """

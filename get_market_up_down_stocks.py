@@ -51,6 +51,29 @@ def get_previous_trading_day(current_date):
         print(f"获取前一交易日失败: {e}")
         return None
 
+def get_trading_days(end_date, days=20):
+    """获取截至指定日期的N个交易日列表"""
+    pro = ts.pro_api(TUSHARE_TOKEN)
+    try:
+        # 向前推30天，确保足够获取N个交易日
+        date_obj = datetime.datetime.strptime(end_date, '%Y%m%d')
+        start_date = (date_obj - datetime.timedelta(days=days*2)).strftime('%Y%m%d')
+        
+        # 获取交易日历
+        trade_cal = pro.trade_cal(exchange='SSE', 
+                               start_date=start_date,
+                               end_date=end_date,
+                               fields='cal_date,is_open')
+        
+        # 筛选交易日并按日期排序
+        trade_days = trade_cal[trade_cal['is_open'] == 1]['cal_date'].sort_values().tolist()
+        
+        # 返回最近N个交易日
+        return trade_days[-days:] if len(trade_days) >= days else trade_days
+    except Exception as e:
+        print(f"获取交易日列表失败: {e}")
+        return []
+
 def calculate_market_up_down_counts(df):
     """计算市场涨跌家数"""
     if df is None or df.empty:
@@ -68,6 +91,20 @@ def calculate_market_up_down_counts(df):
     }
     
     return result
+
+def calculate_up_down_ratio(df):
+    """计算上涨/下跌股票的比值"""
+    if df is None or df.empty:
+        return 0.0
+    
+    # 计算涨跌家数
+    up_count = len(df[df['pct_chg'] > 0])  # 上涨家数
+    down_count = len(df[df['pct_chg'] < 0])  # 下跌家数
+    
+    # 避免除以零的情况
+    ratio = up_count / down_count if down_count > 0 else float('inf')
+    
+    return ratio
 
 def plot_market_up_down_chart(data_current, data_previous, trade_date, prev_date):
     """绘制A股市场涨跌家数柱状图"""
@@ -132,6 +169,98 @@ def plot_market_up_down_chart(data_current, data_previous, trade_date, prev_date
     # 显示图表
     plt.show()
 
+def analyze_up_down_ratio(end_date=None, days=20, token=None, save_fig=True, show_fig=True):
+    """
+    分析过去N个交易日的上涨/下跌股票比值
+    
+    参数:
+    end_date: 结束日期，格式'YYYYMMDD'，若为None则使用最近交易日
+    days: 要分析的交易日天数，默认20天
+    token: tushare API token
+    save_fig: 是否保存图表，默认True
+    show_fig: 是否显示图表，默认True
+    
+    返回:
+    pd.DataFrame: 包含日期和上涨/下跌比值的数据框
+    """
+    if token:
+        global TUSHARE_TOKEN
+        TUSHARE_TOKEN = token
+    
+    # 获取日期范围
+    if end_date is None:
+        end_date = datetime.datetime.now().strftime('%Y%m%d')
+    
+    # 获取交易日列表
+    trade_days = get_trading_days(end_date, days)
+    
+    if not trade_days:
+        print("无法获取交易日数据")
+        return None
+    
+    # 计算每个交易日的上涨/下跌比值
+    ratio_data = []
+    for date in trade_days:
+        df = get_stock_daily_basic(date)
+        ratio = calculate_up_down_ratio(df)
+        ratio_data.append({
+            'trade_date': date,
+            'up_down_ratio': ratio
+        })
+    
+    # 转换为DataFrame
+    df_ratio = pd.DataFrame(ratio_data)
+    df_ratio['trade_date'] = pd.to_datetime(df_ratio['trade_date'], format='%Y%m%d')
+    
+    # 绘制折线图
+    if save_fig or show_fig:
+        plt.figure(figsize=(12, 6))
+        plt.plot(df_ratio['trade_date'], df_ratio['up_down_ratio'], marker='o', linewidth=2, markersize=8)
+        
+        # 设置标题和标签
+        plt.title('A股市场上涨/下跌股票比值走势', fontsize=16, fontweight='bold')
+        plt.ylabel('上涨/下跌比值', fontsize=14)
+        plt.grid(True, linestyle='--', alpha=0.7)
+        
+        # 设置日期格式
+        plt.gcf().autofmt_xdate()
+        
+        # 添加水平参考线
+        plt.axhline(y=1, color='r', linestyle='--', alpha=0.5)
+        
+        # 添加注释说明
+        plt.annotate('比值=1 (上涨家数=下跌家数)', xy=(df_ratio['trade_date'].iloc[0], 1), 
+                   xytext=(df_ratio['trade_date'].iloc[0], 1.2),
+                   arrowprops=dict(facecolor='black', shrink=0.05, width=1.5, headwidth=8),
+                   fontsize=12)
+        
+        # 添加最新数据点的标注
+        latest_date = df_ratio['trade_date'].iloc[-1]
+        latest_ratio = df_ratio['up_down_ratio'].iloc[-1]
+        plt.annotate(f'{latest_ratio:.2f}', 
+                   xy=(latest_date, latest_ratio),
+                   xytext=(latest_date, latest_ratio * 1.1),
+                   arrowprops=dict(facecolor='blue', shrink=0.05, width=1.5, headwidth=8),
+                   fontsize=12,
+                   color='blue')
+        
+        # 美化图表
+        plt.tight_layout()
+        
+        # 保存图表
+        if save_fig:
+            output_file = f'up_down_ratio_{end_date}.png'
+            plt.savefig(output_file, dpi=300, bbox_inches='tight')
+            print(f"上涨/下跌比值走势图已保存为: {output_file}")
+        
+        # 显示图表
+        if show_fig:
+            plt.show()
+        else:
+            plt.close()
+    
+    return df_ratio
+
 def main():
     # 获取当前日期（格式：YYYYMMDD）
     today = datetime.datetime.now().strftime('%Y%m%d')
@@ -166,8 +295,16 @@ def main():
             for key, value in counts_previous.items():
                 print(f"{key}: {value}")
         
-        # 绘制图表
+        # 绘制柱状图
         plot_market_up_down_chart(counts_current, counts_previous, today, prev_trading_day)
+        
+        # 计算并绘制过去20个交易日的上涨/下跌比值走势
+        print("\n计算过去20个交易日的上涨/下跌比值...")
+        df_ratio = analyze_up_down_ratio(end_date=today, days=20, show_fig=True)
+        
+        if df_ratio is not None:
+            print("\n上涨/下跌比值统计:")
+            print(df_ratio)
     else:
         print("无法获取前一个交易日")
 

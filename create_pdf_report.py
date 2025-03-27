@@ -37,6 +37,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
             return 5
         elif 'capital_concentration' in filename:
             return 6
+        elif 'up_down_ratio' in filename:
+            return 7
         else:
             return 100  # 其他文件放到最后
     
@@ -111,7 +113,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
         # ["3.", "热点行业个股资金流向", "4"],
         ["3.", "全市场个股资金净流入", "4"],
         ["4.", "量价背离指数", "5"],
-        ["5.", "资金集中度指标", "6"]
+        ["5.", "资金集中度指标", "6"],
+        ["6.", "上涨/下跌股票比值", "7"]
     ]
     
     # 创建目录表格
@@ -198,6 +201,7 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
             content.append(Spacer(1, 0.5*cm))
             
         elif 'market_inflow_rate' in img_file:
+            # 流入率图片
             img = Image(img_file, width=16*cm, height=10*cm)
             content.append(img)
             content.append(Spacer(1, 0.5*cm))
@@ -210,9 +214,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
             section_title = Paragraph(f"{section_num}. 量价背离指数", styles['ChineseSubtitle'])
             content.append(section_title)
             
-            description = Paragraph("量价背离指数反映了市场的虚涨风险，通过计算涨幅前50只股票中资金净流出的股票占比，"
-                                  "当指标超过30%时警示市场回调可能性增大。该指标展示了过去一段时间的变化趋势，"
-                                  "帮助判断市场中资金与价格是否背离。", styles['ChineseBody'])
+            description = Paragraph("本部分计算了量价背离指数，即涨幅靠前但资金净流出的个股比例，"
+                                  "以反映市场虚涨风险。当该指标超过30%时，市场可能面临回调风险。", styles['ChineseBody'])
             content.append(description)
             
             img = Image(img_file, width=16*cm, height=10*cm)
@@ -227,26 +230,47 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
             section_title = Paragraph(f"{section_num}. 资金集中度指标", styles['ChineseSubtitle'])
             content.append(section_title)
             
-            description = Paragraph("资金集中度指标衡量市场资金流入的集中程度，通过计算前10%个股的资金净流入占全市场比例，"
-                                  "反映市场情绪的分化程度。该指标越高表明市场资金越集中，市场情绪越分化，"
-                                  "指标变化趋势帮助判断市场热点是否持续集中。", styles['ChineseBody'])
+            description = Paragraph("本部分计算了资金集中度指标，即市场前10%个股的资金净流入占全市场比例，"
+                                  "反映市场资金分布情况。该指标越高，表明市场情绪越分化，热点越集中。", styles['ChineseBody'])
             content.append(description)
             
             img = Image(img_file, width=16*cm, height=10*cm)
             content.append(img)
+            content.append(Spacer(1, 0.5*cm))
             
             section_num += 1
+            content.append(Paragraph("", styles['ChineseBody']))  # 添加分页符
+            
+        elif 'up_down_ratio' in img_file:
+            # 上涨/下跌股票比值部分
+            section_title = Paragraph(f"{section_num}. 上涨/下跌股票比值", styles['ChineseSubtitle'])
+            content.append(section_title)
+            
+            description = Paragraph("本部分计算了市场上涨/下跌股票比值，即日内收盘上涨的股票数量与下跌股票数量的比值，"
+                                  "反映市场整体强弱。比值大于1表示上涨家数多于下跌家数，市场整体偏强；"
+                                  "比值小于1表示下跌家数多于上涨家数，市场整体偏弱；"
+                                  "比值大于2或小于0.5通常表示市场处于明显的单边行情中。", styles['ChineseBody'])
+            content.append(description)
+            
+            img = Image(img_file, width=16*cm, height=10*cm)
+            content.append(img)
+            content.append(Spacer(1, 0.5*cm))
+            
+            section_num += 1
+            content.append(Paragraph("", styles['ChineseBody']))  # 添加分页符
     
-    # 添加报告尾注
-    content.append(Spacer(1, 1*cm))
-    footer = Paragraph("注：本报告基于历史数据分析，仅供参考，不构成投资建议。", styles['ChineseBody'])
-    content.append(footer)
+    # 添加报告结论
+    conclusion_title = Paragraph("报告结论", styles['ChineseSubtitle'])
+    content.append(conclusion_title)
     
-    # 构建PDF
+    conclusion = Paragraph("本报告通过多维度分析市场表现，为投资决策提供参考。请结合自身风险偏好和投资目标，"
+                         "审慎使用本报告提供的信息。市场有风险，投资需谨慎。", styles['ChineseBody'])
+    content.append(conclusion)
+    
+    # 构建并保存PDF
     doc.build(content)
     
-    print(f"PDF报告已成功生成: {os.path.abspath(output_filename)}")
-
+    print(f"PDF报告已生成: {output_filename}")
     return output_filename
 
 if __name__ == "__main__":
