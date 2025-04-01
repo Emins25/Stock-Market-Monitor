@@ -294,8 +294,30 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     
     content.append(Spacer(1, 15))
     
-    # 9. 结论
-    content.append(Paragraph("9. 市场监测结论", subtitle_style))
+    # 9. 新高/新低股票数分析
+    content.append(Paragraph("9. 新高/新低股票数分析", subtitle_style))
+    
+    # 52周新高/新低图
+    high_low_52w_fig = get_latest_figure("high_low_52w_*.png")
+    if high_low_52w_fig:
+        img = Image(high_low_52w_fig, width=6.5*inch, height=3.5*inch)
+        content.append(img)
+        content.append(Spacer(1, 5))
+        content.append(Paragraph("图10: 52周新高/新低股票数趋势（过去30个交易日）", caption_style))
+    
+    # 26周新高/新低图
+    high_low_26w_fig = get_latest_figure("high_low_26w_*.png")
+    if high_low_26w_fig:
+        img = Image(high_low_26w_fig, width=6.5*inch, height=3.5*inch)
+        content.append(img)
+        content.append(Spacer(1, 5))
+        content.append(Paragraph("图11: 26周新高/新低股票数趋势（过去30个交易日）", caption_style))
+        content.append(Paragraph("说明: 新高/新低股票数量反映市场健康程度。在上涨行情中，新高数量持续增加表示上涨动能强劲；新高数量减少但指数创新高可能暗示市场即将见顶。在下跌行情中，新低数量持续增加表示卖压沉重；新低数量明显减少可能表明市场接近底部。", note_style))
+    
+    content.append(Spacer(1, 15))
+    
+    # 10. 结论
+    content.append(Paragraph("10. 市场监测结论", subtitle_style))
     
     conclusion_text = """
     基于以上分析，我们对当前市场状况得出以下结论：
@@ -316,7 +338,9 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     
     8. 涨停板晋级率：通过跟踪连板效应评估市场强度，晋级率高低反映市场赚钱效应。
     
-    综合判断：通过以上八个维度的综合分析，形成对市场的整体研判，指导投资决策。
+    9. 新高/新低股票数：观察市场结构健康程度，新高数减少或新低数增多往往是市场转向的先导信号。
+    
+    综合判断：通过以上九个维度的综合分析，形成对市场的整体研判，指导投资决策。
     """
     
     content.append(Paragraph(conclusion_text, normal_style))

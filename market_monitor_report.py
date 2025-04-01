@@ -56,6 +56,8 @@ from get_market_up_down_stocks import analyze_up_down_ratio
 from market_technical_indicators import analyze_market_trend
 # 导入涨停板晋级率分析模块
 from analyze_limit_promotion_rate import analyze_limit_stocks
+# 导入新高/新低股票数分析模块
+from analyze_high_low_stocks import analyze_high_low
 
 # 设置统一的图表样式
 def set_global_chart_style():
@@ -93,7 +95,7 @@ def set_global_chart_style():
     plt.rcParams['figure.dpi'] = 100         # 默认DPI
     plt.rcParams['savefig.dpi'] = 120        # 保存图表的DPI
 
-def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, token=None, days=20, promotion_days=30):
+def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, token=None, days=20, promotion_days=30, high_low_days=30):
     """
     生成完整的市场监测报告
     
@@ -104,6 +106,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     token: tushare API token，若为None则使用默认token
     days: 要分析的历史天数，用于量价背离指数和资金集中度指标，默认为20
     promotion_days: 涨停板晋级率分析的天数，默认为30
+    high_low_days: 新高/新低分析的天数，默认为30
     
     返回:
     str: 生成的PDF报告路径
@@ -126,6 +129,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"每个行业分析热门股票数量: {top_stock_count}")
     print(f"历史分析天数: {days}天")
     print(f"涨停板晋级率分析天数: {promotion_days}天")
+    print(f"新高/新低分析天数: {high_low_days}天")
     
     start_time = datetime.now()
     print(f"\n开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -137,7 +141,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
         end_date = date
     
     # 1. 生成大盘指数表现图
-    print("\n[1/8] 正在生成市场指数表现图...")
+    print("\n[1/9] 正在生成市场指数表现图...")
     
     # 定义指数名称字典
     index_names = {
@@ -155,14 +159,14 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"市场指数表现图生成完成")
     
     # 2. 生成行业资金流向图
-    print("\n[2/8] 正在生成行业资金流向图...")
+    print("\n[2/9] 正在生成行业资金流向图...")
     df_industry = plot_industry_moneyflow(token=token, date=end_date, top_n=10, save_fig=True, show_fig=False)
     print(f"行业资金流向图生成完成")
     
     # 注释掉热点行业个股分析部分
     """
     # 3. 生成热点行业个股分析图
-    print("\n[3/8] 正在分析热点行业个股资金流向...")
+    print("\n[3/9] 正在分析热点行业个股资金流向...")
     # 通过以下步骤实现：
     # - 获取行业资金流向数据，获取净流入最高的行业及其ts_code
     # - 使用指数成分和权重API获取行业成分股列表
@@ -177,7 +181,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     """
     
     # 3. 分析全市场个股资金净流入情况
-    print("\n[3/8] 正在分析全市场个股资金净流入情况...")
+    print("\n[3/9] 正在分析全市场个股资金净流入情况...")
     # 只获取资金净流入排行，不再获取资金净流入率排行
     net_inflow_top, _ = analyze_market_moneyflow(token=token, date=end_date, 
                                             top_n=top_stock_count, 
@@ -187,7 +191,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"全市场个股资金净流入分析完成")
     
     # 4. 分析量价背离指数
-    print("\n[4/8] 正在分析量价背离指数...")
+    print("\n[4/9] 正在分析量价背离指数...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的量价背离指数
     # - 绘制折线图展示结果
@@ -198,7 +202,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"量价背离指数分析完成")
     
     # 5. 分析资金集中度指标
-    print("\n[5/8] 正在分析资金集中度指标...")
+    print("\n[5/9] 正在分析资金集中度指标...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的资金集中度指标
     # - 绘制折线图展示结果
@@ -209,7 +213,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"资金集中度指标分析完成")
     
     # 6. 分析上涨/下跌股票比值
-    print("\n[6/8] 正在分析上涨/下跌股票比值...")
+    print("\n[6/9] 正在分析上涨/下跌股票比值...")
     # 通过以下步骤实现：
     # - 计算过去N个交易日的上涨/下跌股票比值
     # - 绘制折线图展示结果
@@ -219,7 +223,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"上涨/下跌股票比值分析完成")
     
     # 7. 生成技术指标分析图
-    print("\n[7/8] 正在分析技术指标...")
+    print("\n[7/9] 正在分析技术指标...")
     # 分析市场趋势并生成技术指标图表
     tech_prediction, tech_fig_path = analyze_market_trend(
         market_code='000001.SH',   # 分析上证指数
@@ -232,7 +236,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     print(f"技术指标分析完成")
     
     # 8. 分析涨停板晋级率
-    print("\n[8/8] 正在分析涨停板晋级率...")
+    print("\n[8/9] 正在分析涨停板晋级率...")
     # 分析涨停板晋级率并生成趋势图
     df_promotion = analyze_limit_stocks(
         token=token,
@@ -244,7 +248,20 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"涨停板晋级率分析完成")
     
-    # 9. 生成PDF报告
+    # 9. 分析新高/新低股票数量
+    print("\n[9/9] 正在分析新高/新低股票数量...")
+    # 分析新高/新低股票数量并生成趋势图
+    df_52w, df_26w = analyze_high_low(
+        token=token,
+        end_date=end_date,
+        days=high_low_days,
+        save_fig=True,
+        show_fig=False
+    )
+    
+    print(f"新高/新低股票数分析完成")
+    
+    # 10. 生成PDF报告
     print("\n正在生成PDF报告...")
     report_filename = f"Stock_Market_Monitor_{end_date}.pdf"
     # 创建reports目录（如果不存在）
@@ -256,7 +273,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     report_path = os.path.join(reports_dir, report_filename)
     create_pdf_report(output_filename=report_path)
     
-    # 10. 清理临时图片文件
+    # 11. 清理临时图片文件
     print("\n清理临时图片文件...")
     clean_temp_files(end_date)
     
@@ -317,18 +334,20 @@ def main():
     parser.add_argument('--stocks', '-s', type=int, default=10, help='每个行业分析热门股票数量，默认为10')
     parser.add_argument('--days', '-n', type=int, default=20, help='历史分析天数，用于量价背离指数和资金集中度指标，默认为20')
     parser.add_argument('--promotion-days', '-p', type=int, default=30, help='涨停板晋级率分析天数，默认为30')
+    parser.add_argument('--high-low-days', '-hl', type=int, default=30, help='新高/新低分析天数，默认为30')
     parser.add_argument('--token', '-t', type=str, help='tushare API token')
     
     args = parser.parse_args()
     
     # 生成报告
     generate_market_report(
-        date='20250331', 
+        date=args.date,
         top_industry_count=args.industries, 
         top_stock_count=args.stocks,
         token=args.token,
         days=args.days,
-        promotion_days=args.promotion_days
+        promotion_days=args.promotion_days,
+        high_low_days=args.high_low_days
     )
 
 if __name__ == "__main__":
