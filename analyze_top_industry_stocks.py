@@ -392,7 +392,7 @@ def plot_industry_top_stocks(industry_name, stocks_df, trade_date, industry_rank
     elif 'net_mf_amount' in stocks_df.columns:
         # 如果存在net_mf_amount列但不存在net_amount列
         net_amount_col = pd.to_numeric(stocks_df['net_mf_amount'], errors='coerce')
-        net_amounts = net_amount_col / 10000
+            net_amounts = net_amount_col / 10000
         print("使用net_mf_amount列，单位：万元，转换为亿元")
     elif 'amount' in stocks_df.columns:
         # 如果没有净流入数据，使用成交额作为替代

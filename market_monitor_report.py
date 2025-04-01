@@ -323,7 +323,7 @@ def main():
     
     # 生成报告
     generate_market_report(
-        date=args.date, 
+        date='20250331', 
         top_industry_count=args.industries, 
         top_stock_count=args.stocks,
         token=args.token,
