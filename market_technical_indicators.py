@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 技术指标计算模块
-实现MACD、RSI、KDJ等技术指标的计算，用于市场顶底预测
+实现RSI技术指标的计算，用于市场顶底预测
 """
 
 import numpy as np
@@ -29,47 +29,13 @@ TOKEN = '284b804f2f919ea85cb7e6dfe617ff81f123c80b4cd3c4b13b35d736'
 ts.set_token(TOKEN)
 pro = ts.pro_api()
 
-def calculate_macd(data, fast_period=12, slow_period=26, signal_period=9):
+def calculate_rsi(data, periods=[6, 14, 24]):
     """
-    计算MACD指标
+    计算RSI指标（相对强弱指数）
     
     参数:
         data (pd.DataFrame): 包含收盘价的DataFrame，必须有'close'列
-        fast_period (int): 快线周期
-        slow_period (int): 慢线周期
-        signal_period (int): 信号线周期
-        
-    返回:
-        pd.DataFrame: 包含MACD指标的DataFrame(DIF, DEA, MACD)
-    """
-    if 'close' not in data.columns:
-        raise ValueError("输入数据必须包含'close'列")
-    
-    # 复制数据，避免修改原始数据
-    df = data.copy()
-    
-    # 计算EMA
-    df['ema_fast'] = df['close'].ewm(span=fast_period, adjust=False).mean()
-    df['ema_slow'] = df['close'].ewm(span=slow_period, adjust=False).mean()
-    
-    # 计算DIF (DIFF)
-    df['dif'] = df['ema_fast'] - df['ema_slow']
-    
-    # 计算DEA (MACD Signal)
-    df['dea'] = df['dif'].ewm(span=signal_period, adjust=False).mean()
-    
-    # 计算柱状图 (MACD Histogram)
-    df['macd'] = (df['dif'] - df['dea']) * 2
-    
-    return df[['dif', 'dea', 'macd']]
-
-def calculate_rsi(data, periods=[6, 12, 24]):
-    """
-    计算RSI指标
-    
-    参数:
-        data (pd.DataFrame): 包含收盘价的DataFrame，必须有'close'列
-        periods (list): RSI周期列表，默认计算6、12、24周期
+        periods (list): RSI周期列表，默认计算6、14、24周期
         
     返回:
         pd.DataFrame: 包含不同周期RSI指标的DataFrame
@@ -92,9 +58,9 @@ def calculate_rsi(data, periods=[6, 12, 24]):
         df[f'gain_{period}'] = df['price_diff'].clip(lower=0)
         df[f'loss_{period}'] = -df['price_diff'].clip(upper=0)
         
-        # 计算平均上涨和平均下跌
-        avg_gain = df[f'gain_{period}'].rolling(window=period).mean()
-        avg_loss = df[f'loss_{period}'].rolling(window=period).mean()
+        # 计算平均上涨和平均下跌 (使用EMA计算方式更准确)
+        avg_gain = df[f'gain_{period}'].ewm(alpha=1/period, min_periods=period).mean()
+        avg_loss = df[f'loss_{period}'].ewm(alpha=1/period, min_periods=period).mean()
         
         # 计算相对强度RS
         rs = avg_gain / avg_loss
@@ -103,38 +69,6 @@ def calculate_rsi(data, periods=[6, 12, 24]):
         result[f'rsi_{period}'] = 100 - (100 / (1 + rs))
     
     return result
-
-def get_indicator_signals(data, indicators):
-    """
-    根据技术指标生成买入卖出信号
-    
-    参数:
-        data (pd.DataFrame): 包含价格和指标数据的DataFrame
-        indicators (list): 需要分析的指标列表，可包含'macd'、'rsi'等
-        
-    返回:
-        pd.DataFrame: 包含买入卖出信号的DataFrame
-    """
-    signals = pd.DataFrame(index=data.index)
-    signals['signal'] = 0  # 0表示无信号，1表示买入信号，-1表示卖出信号
-    
-    # MACD信号
-    if 'macd' in indicators and all(col in data.columns for col in ['dif', 'dea']):
-        # MACD金叉：DIF从下向上穿越DEA
-        signals.loc[(data['dif'] > data['dea']) & (data['dif'].shift(1) <= data['dea'].shift(1)), 'macd_signal'] = 1
-        
-        # MACD死叉：DIF从上向下穿越DEA
-        signals.loc[(data['dif'] < data['dea']) & (data['dif'].shift(1) >= data['dea'].shift(1)), 'macd_signal'] = -1
-    
-    # RSI信号
-    if 'rsi' in indicators and 'rsi_14' in data.columns:
-        # RSI超买
-        signals.loc[data['rsi_14'] > 70, 'rsi_signal'] = -1
-        
-        # RSI超卖
-        signals.loc[data['rsi_14'] < 30, 'rsi_signal'] = 1
-    
-    return signals
 
 def get_stock_indicators(ts_code, start_date, end_date):
     """
@@ -175,11 +109,10 @@ def get_stock_indicators(ts_code, start_date, end_date):
             df.set_index('trade_date', inplace=True)
             
             # 计算技术指标
-            macd_data = calculate_macd(df)
             rsi_data = calculate_rsi(df)
             
             # 合并数据
-            result = pd.concat([df, macd_data, rsi_data], axis=1)
+            result = pd.concat([df, rsi_data], axis=1)
             
             return result
         
@@ -194,7 +127,7 @@ def get_stock_indicators(ts_code, start_date, end_date):
 
 def plot_technical_indicators(data, title=None):
     """
-    绘制技术指标图表
+    绘制RSI技术指标图表
     
     参数:
         data (pd.DataFrame): 包含价格和技术指标的DataFrame
@@ -202,7 +135,7 @@ def plot_technical_indicators(data, title=None):
     """
     if data is None or data.empty:
         logger.warning("没有数据可供绘图")
-        return
+        return None
     
     # 使用中文字体
     plt.rcParams['font.sans-serif'] = ['SimHei', 'Microsoft YaHei', 'Arial Unicode MS']  # 优先使用的中文字体
@@ -210,106 +143,149 @@ def plot_technical_indicators(data, title=None):
     
     fig = plt.figure(figsize=(14, 10))
     
-    # 创建子图数量 - 总共3个（价格、MACD、RSI）
-    plot_count = 3
+    # 创建子图 - K线图和RSI
+    gs = plt.GridSpec(2, 1, height_ratios=[2, 1])
     
-    # 绘制K线图
-    ax1 = plt.subplot2grid((plot_count, 1), (0, 0), rowspan=1)
-    ax1.plot(data.index, data['close'], 'b-', label='收盘价')
-    ax1.set_title(title or "技术指标分析")
-    ax1.legend(loc='upper right')
+    # 绘制K线图（收盘价）
+    ax1 = plt.subplot(gs[0])
+    ax1.plot(data.index, data['close'], 'b-', linewidth=1.5, label='收盘价')
+    
+    # 添加20日和60日均线
+    data['ma20'] = data['close'].rolling(window=20).mean()
+    data['ma60'] = data['close'].rolling(window=60).mean()
+    ax1.plot(data.index, data['ma20'], 'r-', linewidth=1, label='20日均线')
+    ax1.plot(data.index, data['ma60'], 'g-', linewidth=1, label='60日均线')
+    
+    # 设置价格图表参数
+    ax1.set_title(title or "上证指数RSI技术指标分析", fontsize=16)
     ax1.grid(True, linestyle='--', alpha=0.3)
+    ax1.legend(loc='upper left')
     
-    # 绘制MACD
-    if all(col in data.columns for col in ['dif', 'dea', 'macd']):
-        ax2 = plt.subplot2grid((plot_count, 1), (1, 0), rowspan=1, sharex=ax1)
-        ax2.plot(data.index, data['dif'], 'r-', label='DIF')
-        ax2.plot(data.index, data['dea'], 'g-', label='DEA')
-        ax2.bar(data.index, data['macd'], color='blue', label='MACD')
-        ax2.axhline(y=0, color='k', linestyle='-', alpha=0.3)
-        ax2.set_title("MACD指标")
-        ax2.legend(loc='upper right')
-        ax2.grid(True, linestyle='--', alpha=0.3)
+    # 计算价格振幅，确保图表美观
+    price_range = data['close'].max() - data['close'].min()
+    price_min = data['close'].min() - price_range * 0.05
+    price_max = data['close'].max() + price_range * 0.05
+    ax1.set_ylim(price_min, price_max)
+    
+    # 设置右侧Y轴显示价格范围百分比
+    ax1_right = ax1.twinx()
+    base_price = data['close'].iloc[0]
+    percentage_min = (price_min / base_price - 1) * 100
+    percentage_max = (price_max / base_price - 1) * 100
+    ax1_right.set_ylim(percentage_min, percentage_max)
+    ax1_right.set_ylabel('涨跌幅 (%)', fontsize=12)
     
     # 绘制RSI
+    ax2 = plt.subplot(gs[1], sharex=ax1)
+    
+    # 判断是否有RSI数据
     rsi_cols = [col for col in data.columns if col.startswith('rsi_')]
     if rsi_cols:
-        ax3 = plt.subplot2grid((plot_count, 1), (2, 0), rowspan=1, sharex=ax1)
         for col in rsi_cols:
-            ax3.plot(data.index, data[col], label=col.upper())
+            period = col.split('_')[1]  # 提取周期数字
+            ax2.plot(data.index, data[col], label=f'RSI({period})', linewidth=1.5)
         
         # 标记超买超卖区域
-        ax3.axhline(y=30, color='g', linestyle='--', alpha=0.5)
-        ax3.axhline(y=70, color='r', linestyle='--', alpha=0.5)
-        ax3.fill_between(data.index, 0, 30, color='g', alpha=0.1)
-        ax3.fill_between(data.index, 70, 100, color='r', alpha=0.1)
+        ax2.axhline(y=30, color='g', linestyle='--', alpha=0.5)
+        ax2.axhline(y=70, color='r', linestyle='--', alpha=0.5)
+        ax2.fill_between(data.index, 0, 30, color='g', alpha=0.1)
+        ax2.fill_between(data.index, 70, 100, color='r', alpha=0.1)
         
-        ax3.set_title("RSI指标")
-        ax3.set_ylim(0, 100)
-        ax3.legend(loc='upper right')
-        ax3.grid(True, linestyle='--', alpha=0.3)
+        # 添加标签
+        ax2.text(data.index[-int(len(data)/10)], 72, '超买区域', color='r', fontsize=9)
+        ax2.text(data.index[-int(len(data)/10)], 28, '超卖区域', color='g', fontsize=9)
+        
+        # 设置RSI图表参数
+        ax2.set_ylim(0, 100)
+        ax2.set_ylabel('RSI值', fontsize=12)
+        ax2.grid(True, linestyle='--', alpha=0.3)
+        ax2.legend(loc='upper left')
+    
+    # 美化日期显示
+    # 根据数据量调整日期刻度
+    date_range = (data.index.max() - data.index.min()).days
+    if date_range > 180:
+        ax1.xaxis.set_major_locator(plt.matplotlib.dates.MonthLocator(interval=1))
+        ax1.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%Y-%m'))
+    else:
+        ax1.xaxis.set_major_locator(plt.matplotlib.dates.WeekdayLocator(interval=2))
+        ax1.xaxis.set_major_formatter(plt.matplotlib.dates.DateFormatter('%m-%d'))
+    
+    # 添加注释说明RSI的使用方法
+    note_text = (
+        "RSI使用方法:\n"
+        "1. RSI>70为超买区域，可能预示顶部形成\n"
+        "2. RSI<30为超卖区域，可能预示底部形成\n"
+        "3. 价格创新高但RSI未创新高（顶背离）可能信号顶部\n"
+        "4. 价格创新低但RSI未创新低（底背离）可能信号底部"
+    )
+    plt.figtext(0.02, 0.02, note_text, fontsize=10, bbox=dict(facecolor='white', alpha=0.8))
+    
+    # 寻找并标记RSI背离点
+    mark_divergence(data, ax1, ax2)
     
     plt.tight_layout()
+    plt.subplots_adjust(bottom=0.15)  # 为底部注释留出空间
+    
     return fig
 
-def predict_market_tops_bottoms(data):
+def mark_divergence(data, price_ax, rsi_ax):
     """
-    基于技术指标预测市场顶部和底部
+    标记价格与RSI的背离点
     
     参数:
-        data (pd.DataFrame): 包含价格和技术指标的DataFrame
-        
-    返回:
-        pd.DataFrame: 包含顶部和底部预测的DataFrame
+        data: 包含价格和RSI的DataFrame
+        price_ax: 价格子图
+        rsi_ax: RSI子图
     """
-    if data is None or data.empty:
-        logger.warning("没有数据可供分析")
-        return None
+    if data is None or data.empty or len(data) < 30:
+        return
     
-    # 确保数据包含所需指标
-    required_columns = ['close', 'dif', 'dea', 'macd']
+    # 使用14天RSI
     rsi_col = 'rsi_14' if 'rsi_14' in data.columns else None
+    if rsi_col is None:
+        return
     
-    missing_columns = [col for col in required_columns if col not in data.columns]
-    if missing_columns:
-        logger.warning(f"数据缺少以下必需列: {missing_columns}")
-        return None
+    # 计算20日滚动窗口的最高价和最低价
+    window = 20
+    data['price_high'] = data['close'].rolling(window=window).max()
+    data['price_low'] = data['close'].rolling(window=window).min()
+    data['rsi_high'] = data[rsi_col].rolling(window=window).max()
+    data['rsi_low'] = data[rsi_col].rolling(window=window).min()
     
-    # 初始化结果DataFrame
-    result = pd.DataFrame(index=data.index)
-    result['close'] = data['close']
-    result['prediction'] = 0  # 0代表中性，1代表底部，-1代表顶部
+    # 找出潜在的顶背离点
+    top_divergence = []
+    for i in range(window, len(data)-1):
+        # 如果当前价格接近20日高点，但RSI明显低于之前高点
+        if (data['close'].iloc[i] > data['close'].iloc[i-1] and 
+            data['close'].iloc[i] > 0.98 * data['price_high'].iloc[i] and
+            data[rsi_col].iloc[i] < 0.95 * data['rsi_high'].iloc[i-window:i].max() and
+            data[rsi_col].iloc[i] > 65):  # RSI需要在高位
+            top_divergence.append(i)
     
-    # MACD底部信号：金叉且MACD值为负但变大
-    macd_bottom = ((data['dif'] > data['dea']) & 
-                   (data['dif'].shift(1) <= data['dea'].shift(1)) & 
-                   (data['macd'] < 0) & 
-                   (data['macd'] > data['macd'].shift(1)))
+    # 找出潜在的底背离点
+    bottom_divergence = []
+    for i in range(window, len(data)-1):
+        # 如果当前价格接近20日低点，但RSI明显高于之前低点
+        if (data['close'].iloc[i] < data['close'].iloc[i-1] and 
+            data['close'].iloc[i] < 1.02 * data['price_low'].iloc[i] and
+            data[rsi_col].iloc[i] > 1.05 * data['rsi_low'].iloc[i-window:i].min() and
+            data[rsi_col].iloc[i] < 35):  # RSI需要在低位
+            bottom_divergence.append(i)
     
-    # MACD顶部信号：死叉且MACD值为正但变小
-    macd_top = ((data['dif'] < data['dea']) & 
-                (data['dif'].shift(1) >= data['dea'].shift(1)) & 
-                (data['macd'] > 0) & 
-                (data['macd'] < data['macd'].shift(1)))
+    # 标记顶背离点
+    for i in top_divergence:
+        price_ax.scatter(data.index[i], data['close'].iloc[i], 
+                     color='red', marker='v', s=100, zorder=5)
+        price_ax.text(data.index[i], data['close'].iloc[i]*1.02, 
+                   '顶背离', color='red', fontsize=10, ha='center')
     
-    # RSI信号
-    rsi_bottom = pd.Series(False, index=data.index)
-    rsi_top = pd.Series(False, index=data.index)
-    
-    if rsi_col:
-        # RSI底部信号：RSI低于30且回升
-        rsi_bottom = (data[rsi_col] < 30) & (data[rsi_col] > data[rsi_col].shift(1))
-        
-        # RSI顶部信号：RSI高于70且下降
-        rsi_top = (data[rsi_col] > 70) & (data[rsi_col] < data[rsi_col].shift(1))
-    
-    # 当MACD和RSI同时发出底部信号时，标记为潜在底部
-    result.loc[macd_bottom & rsi_bottom, 'prediction'] = 1  # 底部
-    
-    # 当MACD和RSI同时发出顶部信号时，标记为潜在顶部
-    result.loc[macd_top & rsi_top, 'prediction'] = -1  # 顶部
-    
-    return result
+    # 标记底背离点
+    for i in bottom_divergence:
+        price_ax.scatter(data.index[i], data['close'].iloc[i], 
+                     color='green', marker='^', s=100, zorder=5)
+        price_ax.text(data.index[i], data['close'].iloc[i]*0.98, 
+                   '底背离', color='green', fontsize=10, ha='center')
 
 def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None, days=90, save_fig=True, show_fig=False):
     """
@@ -361,34 +337,18 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
         logger.error(f"未能获取{market_code}从{start_date}到{end_date}的数据")
         return None, None
     
-    # 预测顶底
-    prediction = predict_market_tops_bottoms(market_data)
+    # 生成分析结果
+    prediction = analyze_rsi_signals(market_data)
     
     # 生成图表
-    fig = plot_technical_indicators(market_data, title=f"{market_code} 技术指标分析")
-    
-    # 在收盘价图上标记预测的顶底
-    if prediction is not None and not prediction.empty and fig is not None:
-        ax = fig.axes[0]
-        
-        # 标记底部
-        bottoms = prediction[prediction['prediction'] == 1]
-        if not bottoms.empty:
-            ax.scatter(bottoms.index, bottoms['close'], marker='^', color='g', s=100, label='预测底部')
-        
-        # 标记顶部
-        tops = prediction[prediction['prediction'] == -1]
-        if not tops.empty:
-            ax.scatter(tops.index, tops['close'], marker='v', color='r', s=100, label='预测顶部')
-        
-        ax.legend()
+    fig = plot_technical_indicators(market_data, title=f"{market_code} RSI技术指标分析")
     
     # 保存图表
     fig_path = None
     if save_fig and fig is not None:
-        fig_path = f'market_technical_analysis_{end_date}.png'
+        fig_path = f'market_rsi_analysis_{end_date}.png'
         plt.savefig(fig_path, dpi=300, bbox_inches='tight')
-        logger.info(f"技术分析图表已保存到: {fig_path}")
+        logger.info(f"RSI技术分析图表已保存到: {fig_path}")
     
     # 显示图表
     if show_fig and fig is not None:
@@ -397,6 +357,57 @@ def analyze_market_trend(market_code='000001.SH', start_date=None, end_date=None
         plt.close(fig)
     
     return prediction, fig_path
+
+def analyze_rsi_signals(data):
+    """
+    基于RSI指标分析市场信号
+    
+    参数:
+        data (pd.DataFrame): 包含价格和RSI指标的DataFrame
+        
+    返回:
+        pd.DataFrame: 包含信号的DataFrame
+    """
+    if data is None or data.empty:
+        logger.warning("没有数据可供分析")
+        return None
+    
+    # 确保数据包含所需指标
+    rsi_col = 'rsi_14' if 'rsi_14' in data.columns else None
+    if rsi_col is None:
+        logger.warning("数据中缺少RSI_14指标")
+        return None
+    
+    # 初始化结果DataFrame
+    result = pd.DataFrame(index=data.index)
+    result['close'] = data['close']
+    result['signal'] = 0  # 0代表中性，1代表底部信号，-1代表顶部信号
+    
+    # 添加RSI指标
+    result[rsi_col] = data[rsi_col]
+    
+    # 识别超买信号（RSI > 70）
+    result.loc[data[rsi_col] > 70, 'signal'] = -1
+    
+    # 识别超卖信号（RSI < 30）
+    result.loc[data[rsi_col] < 30, 'signal'] = 1
+    
+    # 寻找RSI背离点（价格与RSI方向不一致）
+    window = 20
+    for i in range(window, len(data)-1):
+        # 价格创新高但RSI未跟进（顶背离）
+        if (data['close'].iloc[i] > data['close'].iloc[i-window:i].max() and 
+            data[rsi_col].iloc[i] < data[rsi_col].iloc[i-window:i].max() and
+            data[rsi_col].iloc[i] > 65):
+            result.iloc[i, result.columns.get_loc('signal')] = -2  # 强烈顶部信号
+        
+        # 价格创新低但RSI未跟进（底背离）
+        if (data['close'].iloc[i] < data['close'].iloc[i-window:i].min() and 
+            data[rsi_col].iloc[i] > data[rsi_col].iloc[i-window:i].min() and
+            data[rsi_col].iloc[i] < 35):
+            result.iloc[i, result.columns.get_loc('signal')] = 2  # 强烈底部信号
+    
+    return result
 
 def create_mock_data(start_date=None, end_date=None):
     """
@@ -447,12 +458,11 @@ def create_mock_data(start_date=None, end_date=None):
         'amount': np.random.normal(3.5e8, 5e7, n)
     }, index=dates)
     
-    # 计算技术指标
-    macd_data = calculate_macd(df)
+    # 计算RSI指标
     rsi_data = calculate_rsi(df)
     
     # 合并数据
-    result = pd.concat([df, macd_data, rsi_data], axis=1)
+    result = pd.concat([df, rsi_data], axis=1)
     return result
 
 if __name__ == "__main__":
@@ -469,14 +479,14 @@ if __name__ == "__main__":
     )
     
     if prediction is not None and not prediction.empty:
-        # 输出最近的预测
-        recent_predictions = prediction[prediction['prediction'] != 0].tail(5)
-        if not recent_predictions.empty:
-            print("\n最近的市场顶底预测:")
-            for idx, row in recent_predictions.iterrows():
-                signal = "底部" if row['prediction'] == 1 else "顶部"
-                print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']}, 预测: {signal}")
+        # 输出最近的信号
+        recent_signals = prediction[prediction['signal'] != 0].tail(5)
+        if not recent_signals.empty:
+            print("\n最近的RSI市场信号:")
+            for idx, row in recent_signals.iterrows():
+                signal_type = "强烈底部" if row['signal'] == 2 else "底部" if row['signal'] == 1 else "强烈顶部" if row['signal'] == -2 else "顶部"
+                print(f"日期: {idx.strftime('%Y-%m-%d')}, 收盘价: {row['close']:.2f}, RSI: {row['rsi_14']:.2f}, 信号: {signal_type}")
         else:
-            print("\n最近没有检测到明显的市场顶底信号")
+            print("\n最近没有检测到明显的RSI信号")
     
-    print(f"\n技术分析图表已保存到: {fig_path}") 
+    print(f"\nRSI技术分析图表已保存到: {fig_path}") 

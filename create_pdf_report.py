@@ -272,13 +272,13 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     
     # 7. 技术指标分析
     content.append(Paragraph("7. 技术指标分析", subtitle_style))
-    tech_fig = get_latest_figure("market_technical_analysis_*.png")
+    tech_fig = get_latest_figure("market_rsi_analysis_*.png")
     if tech_fig:
         img = Image(tech_fig, width=6.5*inch, height=3.5*inch)
         content.append(img)
         content.append(Spacer(1, 5))
-        content.append(Paragraph("图8: 上证指数技术指标分析（MACD、RSI）", caption_style))
-        content.append(Paragraph("说明: MACD指标通过快慢均线的交叉判断趋势变化，RSI指标显示超买超卖信号。两者结合可预测潜在的市场顶部和底部。", note_style))
+        content.append(Paragraph("图8: 上证指数RSI技术指标分析", caption_style))
+        content.append(Paragraph("说明: RSI(相对强弱指数)指标显示超买超卖信号。当RSI>70时市场可能超买，<30时可能超卖。观察价格与RSI的背离，例如价格创新高但RSI未创新高可能信号顶部形成；价格创新低但RSI未创新低可能信号底部形成。", note_style))
     
     content.append(Spacer(1, 15))
     
@@ -334,7 +334,7 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf"):
     
     6. 上涨/下跌比例：全面了解市场整体强弱，作为重要的市场宽度指标。
     
-    7. 技术指标：通过MACD和RSI判断市场顶底，指导短期交易决策。
+    7. RSI技术指标：通过监测RSI超买超卖区域及背离现象，识别潜在的市场顶底位置。
     
     8. 涨停板晋级率：通过跟踪连板效应评估市场强度，晋级率高低反映市场赚钱效应。
     

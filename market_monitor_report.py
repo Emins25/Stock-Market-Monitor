@@ -233,7 +233,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
         show_fig=False            # 不显示图表
     )
     
-    print(f"技术指标分析完成")
+    print(f"RSI技术指标分析完成")
     
     # 8. 分析涨停板晋级率
     print("\n[8/9] 正在分析涨停板晋级率...")
