@@ -117,12 +117,20 @@ def get_stock_indicators(ts_code, start_date, end_date):
             return result
         
         except Exception as e:
+            error_msg = str(e)
+            # 检查是否是API访问频率限制错误
+            if "每分钟最多访问该接口" in error_msg:
+                logger.warning(f"遇到API访问频率限制: {error_msg}")
+                logger.info(f"暂停60秒后继续...")
+                time.sleep(60)  # 暂停60秒后继续尝试
+                continue  # 不增加retry计数，直接重试
+            
             if retry < max_retries - 1:
-                logger.warning(f"获取{ts_code}数据出错（尝试 {retry+1}/{max_retries}）: {str(e)}，将在{retry_delay}秒后重试")
+                logger.warning(f"获取{ts_code}数据出错（尝试 {retry+1}/{max_retries}）: {error_msg}，将在{retry_delay}秒后重试")
                 time.sleep(retry_delay)
                 retry_delay *= 2  # 指数退避策略
             else:
-                logger.error(f"获取{ts_code}技术指标时出错: {str(e)}")
+                logger.error(f"获取{ts_code}技术指标时出错: {error_msg}")
                 return None
 
 def plot_technical_indicators(data, title=None):

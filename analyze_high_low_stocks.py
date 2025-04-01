@@ -19,35 +19,48 @@ from datetime import datetime, timedelta
 import time
 from matplotlib.ticker import MaxNLocator
 
+# 导入通用的Tushare工具模块
+try:
+    from tushare_utils import get_data_with_retry
+except ImportError:
+    # 如果导入失败，使用内部定义的版本
+    def get_data_with_retry(func, max_tries=3, **kwargs):
+        """
+        带重试机制的数据获取函数
+        
+        参数:
+        func: tushare接口函数
+        max_tries: 最大重试次数，默认为3
+        **kwargs: 传递给接口的参数
+        
+        返回:
+        pd.DataFrame: 获取的数据
+        """
+        for i in range(max_tries):
+            try:
+                data = func(**kwargs)
+                return data
+            except Exception as e:
+                error_msg = str(e)
+                print(f"获取数据时出错 (尝试 {i+1}/{max_tries}): {error_msg}")
+                
+                # 检查是否是API访问频率限制错误
+                if "每分钟最多访问该接口" in error_msg:
+                    print(f"遇到API访问频率限制，暂停60秒后继续...")
+                    time.sleep(60)  # 暂停60秒后继续尝试
+                    continue  # 不增加retry计数，直接重试
+                
+                if i < max_tries - 1:  # 如果不是最后一次尝试，等待一段时间后重试
+                    sleep_time = (i + 1) * 2  # 指数退避
+                    print(f"等待 {sleep_time} 秒后重试...")
+                    time.sleep(sleep_time)
+        
+        # 所有尝试都失败，返回空DataFrame
+        print("所有尝试都失败，返回空数据")
+        return pd.DataFrame()
+
 # 全局变量
 TUSHARE_TOKEN = '284b804f2f919ea85cb7e6dfe617ff81f123c80b4cd3c4b13b35d736'
-
-def get_data_with_retry(func, max_tries=3, **kwargs):
-    """
-    带重试机制的数据获取函数
-    
-    参数:
-    func: tushare接口函数
-    max_tries: 最大重试次数，默认为3
-    **kwargs: 传递给接口的参数
-    
-    返回:
-    pd.DataFrame: 获取的数据
-    """
-    for i in range(max_tries):
-        try:
-            data = func(**kwargs)
-            return data
-        except Exception as e:
-            print(f"获取数据时出错 (尝试 {i+1}/{max_tries}): {str(e)}")
-            if i < max_tries - 1:  # 如果不是最后一次尝试，等待一段时间后重试
-                sleep_time = (i + 1) * 2  # 指数退避
-                print(f"等待 {sleep_time} 秒后重试...")
-                time.sleep(sleep_time)
-    
-    # 所有尝试都失败，返回空DataFrame
-    print("所有尝试都失败，返回空数据")
-    return pd.DataFrame()
 
 def get_trade_dates(pro, start_date, end_date):
     """
