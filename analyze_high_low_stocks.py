@@ -139,14 +139,23 @@ def get_stock_price_data(pro, ts_code, start_date, end_date):
         if not df_db.empty and len(df_db) >= 20:  # 假设至少需要20天数据
             logger.debug(f"从数据库获取到股票 {ts_code} 的价格数据: {len(df_db)} 条记录")
             return df_db
+        
+        # 如果本次请求的日期范围已有过缓存标记，避免重复请求
+        cache_key = f"cache_checked_{ts_code}_{start_date}_{end_date}"
+        if hasattr(get_stock_price_data, cache_key):
+            # 如果已请求过且数据库中无数据，直接返回空DataFrame
+            return df_db
             
         # 从API获取数据
         logger.debug(f"从API获取股票 {ts_code} 的价格数据")
         df_api = get_data_with_retry(pro.daily, ts_code=ts_code, 
                                   start_date=start_date, end_date=end_date)
         
-        # 如果获取到数据，保存到数据库
-        if not df_api.empty:
+        # 标记本次请求已处理，避免重复请求
+        setattr(get_stock_price_data, cache_key, True)
+        
+        # 如果获取到数据，保存到数据库 (只有上交所或深交所的股票才缓存)
+        if not df_api.empty and (ts_code.endswith('.SH') or ts_code.endswith('.SZ')):
             save_stock_daily_data(df_api)
             
         return df_api
@@ -195,11 +204,18 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
     date_obj = datetime.strptime(trade_date, '%Y%m%d')
     start_date = (date_obj - timedelta(days=days)).strftime('%Y%m%d')
     
-    # 获取当日行情数据
-    daily_data = get_data_with_retry(pro.daily, trade_date=trade_date)
-    if daily_data.empty:
-        logger.warning(f"获取 {trade_date} 行情数据失败")
-        return 0, 0
+    # 缓存日期，避免对同一天重复处理
+    cache_key = f"daily_data_{trade_date}"
+    if hasattr(calculate_high_low_for_date, cache_key):
+        daily_data = getattr(calculate_high_low_for_date, cache_key)
+    else:
+        # 获取当日行情数据
+        daily_data = get_data_with_retry(pro.daily, trade_date=trade_date)
+        if daily_data.empty:
+            logger.warning(f"获取 {trade_date} 行情数据失败")
+            return 0, 0
+        # 缓存到函数属性中
+        setattr(calculate_high_low_for_date, cache_key, daily_data)
     
     high_count = 0
     low_count = 0
@@ -208,41 +224,46 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
     total_stocks = len(all_stocks)
     processed_stocks = 0
     
+    # 批处理策略：每次处理批量股票，减少输出日志频率
+    batch_size = 100
+    
     # 对于每只股票，检查是否创新高/新低
-    for index, stock in all_stocks.iterrows():
-        ts_code = stock['ts_code']
+    for i in range(0, total_stocks, batch_size):
+        batch_stocks = all_stocks.iloc[i:i+batch_size]
         
         # 更新进度
-        processed_stocks += 1
-        if processed_stocks % 50 == 0 or processed_stocks == total_stocks:
-            logger.info(f"处理进度: {processed_stocks}/{total_stocks} ({processed_stocks/total_stocks*100:.1f}%)")
+        processed_stocks += len(batch_stocks)
+        logger.info(f"处理进度: {processed_stocks}/{total_stocks} ({processed_stocks/total_stocks*100:.1f}%)")
         
-        # 获取当日该股票的收盘价
-        stock_daily = daily_data[daily_data['ts_code'] == ts_code]
-        if stock_daily.empty:
-            continue
-        
-        current_close = stock_daily['close'].values[0]
-        
-        # 获取历史价格数据
-        hist_data = get_stock_price_data(pro, ts_code, start_date, trade_date)
-        if hist_data.empty or len(hist_data) < 20:  # 确保有足够的历史数据
-            continue
-        
-        # 排除当天的数据，只比较历史数据
-        hist_data = hist_data[hist_data['trade_date'] < trade_date]
-        if hist_data.empty:
-            continue
-        
-        # 计算历史最高价和最低价
-        hist_high = hist_data['high'].max()
-        hist_low = hist_data['low'].min()
-        
-        # 判断是否创新高或新低
-        if current_close >= hist_high:
-            high_count += 1
-        if current_close <= hist_low:
-            low_count += 1
+        for _, stock in batch_stocks.iterrows():
+            ts_code = stock['ts_code']
+            
+            # 获取当日该股票的收盘价
+            stock_daily = daily_data[daily_data['ts_code'] == ts_code]
+            if stock_daily.empty:
+                continue
+            
+            current_close = stock_daily['close'].values[0]
+            
+            # 获取历史价格数据
+            hist_data = get_stock_price_data(pro, ts_code, start_date, trade_date)
+            if hist_data.empty or len(hist_data) < 20:  # 确保有足够的历史数据
+                continue
+            
+            # 排除当天的数据，只比较历史数据
+            hist_data = hist_data[hist_data['trade_date'] < trade_date]
+            if hist_data.empty:
+                continue
+            
+            # 计算历史最高价和最低价
+            hist_high = hist_data['high'].max()
+            hist_low = hist_data['low'].min()
+            
+            # 判断是否创新高或新低
+            if current_close >= hist_high:
+                high_count += 1
+            if current_close <= hist_low:
+                low_count += 1
     
     logger.info(f"{trade_date} {week_count}周新高数量: {high_count}, 新低数量: {low_count}")
     return high_count, low_count

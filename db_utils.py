@@ -155,12 +155,65 @@ def save_stock_daily_data(df_daily):
             if col not in df_daily.columns:
                 df_daily[col] = None
         
-        # 保存数据
-        df_daily.to_sql('stock_daily_data', conn, if_exists='append', index=False)
-        saved_count = len(df_daily)
+        # 使用临时表和INSERT OR IGNORE策略来避免主键冲突
+        cursor = conn.cursor()
+        
+        # 创建临时表存储新数据
+        cursor.execute('''
+        CREATE TEMPORARY TABLE temp_stock_data (
+            ts_code TEXT,
+            trade_date TEXT,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL,
+            pre_close REAL,
+            change REAL,
+            pct_chg REAL,
+            vol REAL,
+            amount REAL,
+            PRIMARY KEY (ts_code, trade_date)
+        )
+        ''')
+        
+        # 准备数据并执行批量插入
+        columns = ['ts_code', 'trade_date', 'open', 'high', 'low', 'close', 
+                  'pre_close', 'change', 'pct_chg', 'vol', 'amount']
+        placeholders = ', '.join(['?'] * len(columns))
+        
+        insert_query = f'''
+        INSERT INTO temp_stock_data ({', '.join(columns)})
+        VALUES ({placeholders})
+        '''
+        
+        # 准备数据
+        data_to_insert = []
+        for _, row in df_daily.iterrows():
+            data_row = [row.get(col, None) for col in columns]
+            data_to_insert.append(data_row)
+        
+        # 批量插入临时表
+        cursor.executemany(insert_query, data_to_insert)
+        
+        # 从临时表插入到主表，忽略已存在的记录
+        cursor.execute('''
+        INSERT OR IGNORE INTO stock_daily_data
+        SELECT * FROM temp_stock_data
+        ''')
+        
+        # 获取实际插入的记录数
+        inserted_count = cursor.rowcount
+        
+        # 关闭连接
+        conn.commit()
         conn.close()
-        logger.info(f"已保存 {saved_count} 条股票日线数据到数据库")
-        return saved_count
+        
+        if inserted_count > 0:
+            logger.info(f"已保存 {inserted_count} 条股票日线数据到数据库")
+        else:
+            logger.debug("没有新的股票日线数据需要保存")
+            
+        return inserted_count
     except Exception as e:
         logger.error(f"保存股票日线数据时出错: {e}")
         return 0
