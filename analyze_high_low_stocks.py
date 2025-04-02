@@ -8,6 +8,7 @@
 1. 统计每天创52周新高和新低的股票数量
 2. 统计每天创26周新高和新低的股票数量
 3. 分别生成52周和26周新高新低趋势图
+4. 支持数据库存储，实现历史数据一次性拉取和每日增量更新
 """
 
 import os
@@ -17,7 +18,20 @@ import matplotlib.pyplot as plt
 import tushare as ts
 from datetime import datetime, timedelta
 import time
+import argparse
 from matplotlib.ticker import MaxNLocator
+import logging
+import sys
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger('high_low_analysis')
 
 # 导入通用的Tushare工具模块
 try:
@@ -59,6 +73,24 @@ except ImportError:
         print("所有尝试都失败，返回空数据")
         return pd.DataFrame()
 
+# 导入数据库工具模块
+try:
+    from db_utils import (save_high_low_stats, get_high_low_stats, 
+                        get_latest_trade_date_in_db, save_stock_daily_data,
+                        get_stock_daily_data, update_db_status, get_db_status,
+                        clear_old_stock_data)
+except ImportError:
+    logger.error("未能导入数据库工具模块，请确保db_utils.py文件存在")
+    # 定义空函数，防止程序崩溃
+    def save_high_low_stats(*args, **kwargs): return False
+    def get_high_low_stats(*args, **kwargs): return pd.DataFrame()
+    def get_latest_trade_date_in_db(*args, **kwargs): return None
+    def save_stock_daily_data(*args, **kwargs): return 0
+    def get_stock_daily_data(*args, **kwargs): return pd.DataFrame()
+    def update_db_status(*args, **kwargs): pass
+    def get_db_status(*args, **kwargs): return None
+    def clear_old_stock_data(*args, **kwargs): return 0
+
 # 全局变量
 TUSHARE_TOKEN = '284b804f2f919ea85cb7e6dfe617ff81f123c80b4cd3c4b13b35d736'
 
@@ -82,12 +114,12 @@ def get_trade_dates(pro, start_date, end_date):
             return []
         return sorted(df['cal_date'].tolist())
     except Exception as e:
-        print(f"获取交易日期时出错: {e}")
+        logger.error(f"获取交易日期时出错: {e}")
         return []
 
 def get_stock_price_data(pro, ts_code, start_date, end_date):
     """
-    获取单只股票在指定日期范围内的价格数据
+    获取单只股票在指定日期范围内的价格数据，优先从数据库获取，如果数据库中没有则从API获取
     
     参数:
     pro: tushare pro接口
@@ -99,11 +131,26 @@ def get_stock_price_data(pro, ts_code, start_date, end_date):
     pd.DataFrame: 股票价格数据
     """
     try:
-        df = get_data_with_retry(pro.daily, ts_code=ts_code, 
-                               start_date=start_date, end_date=end_date)
-        return df
+        # 首先从数据库获取数据
+        df_db = get_stock_daily_data(ts_code, start_date, end_date)
+        
+        # 如果数据库中有完整数据，直接返回
+        if not df_db.empty and len(df_db) >= 20:  # 假设至少需要20天数据
+            logger.debug(f"从数据库获取到股票 {ts_code} 的价格数据: {len(df_db)} 条记录")
+            return df_db
+            
+        # 从API获取数据
+        logger.debug(f"从API获取股票 {ts_code} 的价格数据")
+        df_api = get_data_with_retry(pro.daily, ts_code=ts_code, 
+                                  start_date=start_date, end_date=end_date)
+        
+        # 如果获取到数据，保存到数据库
+        if not df_api.empty:
+            save_stock_daily_data(df_api)
+            
+        return df_api
     except Exception as e:
-        print(f"获取股票 {ts_code} 的价格数据时出错: {e}")
+        logger.error(f"获取股票 {ts_code} 的价格数据时出错: {e}")
         return pd.DataFrame()
 
 def get_all_stocks(pro):
@@ -122,7 +169,7 @@ def get_all_stocks(pro):
                                  fields='ts_code,name,industry,market,list_date')
         return stocks
     except Exception as e:
-        print(f"获取股票列表时出错: {e}")
+        logger.error(f"获取股票列表时出错: {e}")
         return pd.DataFrame()
 
 def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
@@ -138,7 +185,7 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
     返回:
     tuple: (新高数量, 新低数量)
     """
-    print(f"分析 {trade_date} 的{week_count}周新高新低...")
+    logger.info(f"分析 {trade_date} 的{week_count}周新高新低...")
     
     # 计算week_count周对应的天数（约等于week_count * 7）
     days = week_count * 7
@@ -150,7 +197,7 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
     # 获取当日行情数据
     daily_data = get_data_with_retry(pro.daily, trade_date=trade_date)
     if daily_data.empty:
-        print(f"获取 {trade_date} 行情数据失败")
+        logger.warning(f"获取 {trade_date} 行情数据失败")
         return 0, 0
     
     high_count = 0
@@ -167,7 +214,7 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
         # 更新进度
         processed_stocks += 1
         if processed_stocks % 50 == 0 or processed_stocks == total_stocks:
-            print(f"处理进度: {processed_stocks}/{total_stocks} ({processed_stocks/total_stocks*100:.1f}%)")
+            logger.info(f"处理进度: {processed_stocks}/{total_stocks} ({processed_stocks/total_stocks*100:.1f}%)")
         
         # 获取当日该股票的收盘价
         stock_daily = daily_data[daily_data['ts_code'] == ts_code]
@@ -196,10 +243,196 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
         if current_close <= hist_low:
             low_count += 1
     
-    print(f"{trade_date} {week_count}周新高数量: {high_count}, 新低数量: {low_count}")
+    logger.info(f"{trade_date} {week_count}周新高数量: {high_count}, 新低数量: {low_count}")
     return high_count, low_count
 
-def analyze_high_low(token=None, end_date=None, days=30, week_counts=[52, 26], save_fig=True, show_fig=False):
+def initial_data_load(pro, end_date, days=90):
+    """
+    初始加载历史数据到数据库
+    
+    参数:
+    pro: tushare pro接口
+    end_date: 结束日期，格式为'YYYYMMDD'
+    days: 要加载的历史天数，默认90天
+    
+    返回:
+    bool: 是否成功加载
+    """
+    logger.info(f"开始初始加载{days}天的历史新高新低数据...")
+    
+    # 获取所有A股股票
+    all_stocks = get_all_stocks(pro)
+    if all_stocks.empty:
+        logger.error("无法获取股票列表")
+        return False
+    
+    # 计算开始日期
+    date_obj = datetime.strptime(end_date, '%Y%m%d')
+    start_date = (date_obj - timedelta(days=days+10)).strftime('%Y%m%d')
+    
+    # 获取交易日列表
+    trade_dates = get_trade_dates(pro, start_date, end_date)
+    if not trade_dates:
+        logger.error("无法获取交易日期")
+        return False
+    
+    # 只取最近days天的交易日
+    recent_trade_dates = trade_dates[-days:] if len(trade_dates) >= days else trade_dates
+    
+    # 记录处理开始时间
+    start_time = time.time()
+    
+    # 处理每个交易日
+    total_dates = len(recent_trade_dates)
+    for i, trade_date in enumerate(recent_trade_dates, 1):
+        logger.info(f"处理日期 {trade_date} ({i}/{total_dates})")
+        
+        # 计算新高新低数量
+        high_52w, low_52w = calculate_high_low_for_date(pro, trade_date, 52, all_stocks)
+        high_26w, low_26w = calculate_high_low_for_date(pro, trade_date, 26, all_stocks)
+        
+        # 保存到数据库
+        save_high_low_stats(trade_date, high_52w, low_52w, high_26w, low_26w)
+        
+        # 显示进度和预计剩余时间
+        elapsed = time.time() - start_time
+        avg_time_per_date = elapsed / i
+        remaining_dates = total_dates - i
+        estimated_remaining = avg_time_per_date * remaining_dates
+        
+        logger.info(f"进度: {i}/{total_dates} ({i/total_dates*100:.1f}%), "
+                   f"已用时间: {elapsed/60:.1f}分钟, "
+                   f"预计剩余: {estimated_remaining/60:.1f}分钟")
+    
+    # 记录完成状态
+    update_db_status('last_full_update', end_date)
+    update_db_status('last_update', end_date)
+    
+    # 清理旧的股票日线数据
+    clear_old_stock_data(days=120)
+    
+    logger.info(f"初始数据加载完成，共处理了{total_dates}个交易日")
+    return True
+
+def incremental_update(pro, end_date):
+    """
+    增量更新最新的新高新低数据
+    
+    参数:
+    pro: tushare pro接口
+    end_date: 结束日期，格式为'YYYYMMDD'
+    
+    返回:
+    bool: 是否成功更新
+    """
+    # A. 获取数据库中最新的交易日期
+    last_date = get_latest_trade_date_in_db()
+    if not last_date:
+        logger.warning("数据库中没有历史数据，需要执行初始数据加载")
+        return False
+    
+    # B. 获取上次更新日期到当前日期的所有交易日
+    date_obj = datetime.strptime(last_date, '%Y%m%d')
+    start_date = (date_obj + timedelta(days=1)).strftime('%Y%m%d')  # 从上次更新后的第一天开始
+    
+    logger.info(f"开始增量更新，上次更新日期: {last_date}, 当前日期: {end_date}")
+    
+    # 如果开始日期大于结束日期，表示已经是最新数据
+    if start_date > end_date:
+        logger.info("已经是最新数据，无需更新")
+        return True
+    
+    # 获取需要更新的交易日列表
+    trade_dates = get_trade_dates(pro, start_date, end_date)
+    if not trade_dates:
+        logger.info(f"从 {start_date} 到 {end_date} 没有交易日，无需更新")
+        return True
+    
+    # 获取所有A股股票
+    all_stocks = get_all_stocks(pro)
+    if all_stocks.empty:
+        logger.error("无法获取股票列表")
+        return False
+    
+    # 更新每个交易日的数据
+    total_dates = len(trade_dates)
+    logger.info(f"需要更新 {total_dates} 个交易日的数据")
+    
+    for i, trade_date in enumerate(trade_dates, 1):
+        logger.info(f"更新日期 {trade_date} ({i}/{total_dates})")
+        
+        # 计算新高新低数量
+        high_52w, low_52w = calculate_high_low_for_date(pro, trade_date, 52, all_stocks)
+        high_26w, low_26w = calculate_high_low_for_date(pro, trade_date, 26, all_stocks)
+        
+        # 保存到数据库
+        save_high_low_stats(trade_date, high_52w, low_52w, high_26w, low_26w)
+    
+    # 更新最后更新日期
+    update_db_status('last_update', end_date)
+    
+    # 清理旧的股票日线数据
+    clear_old_stock_data(days=120)
+    
+    logger.info(f"增量更新完成，共更新了{total_dates}个交易日的数据")
+    return True
+
+def prepare_high_low_data(pro, end_date, days=30, force_update=False):
+    """
+    准备新高新低数据，根据需要执行初始加载或增量更新
+    
+    参数:
+    pro: tushare pro接口
+    end_date: 结束日期，格式为'YYYYMMDD'
+    days: 要分析的天数
+    force_update: 是否强制更新数据，即使数据库中已有最新数据
+    
+    返回:
+    tuple: (52周新高新低DataFrame, 26周新高新低DataFrame)
+    """
+    # 检查是否需要更新数据
+    last_update = get_db_status('last_update')
+    
+    if force_update or not last_update or last_update < end_date:
+        # 如果数据库中没有数据，执行初始加载
+        if not last_update:
+            logger.info("数据库中没有历史数据，执行初始数据加载")
+            initial_data_load(pro, end_date, days=max(days, 90))  # 最少加载90天数据
+        else:
+            # 执行增量更新
+            logger.info(f"执行增量更新，上次更新: {last_update}, 当前日期: {end_date}")
+            incremental_update(pro, end_date)
+    else:
+        logger.info(f"数据库已是最新（{last_update}），无需更新")
+    
+    # 从数据库获取所需的数据
+    df_all = get_high_low_stats(end_date=end_date, days=days)
+    if df_all.empty:
+        logger.error(f"数据库中没有找到{days}天的新高新低数据")
+        return None, None
+    
+    # 将数据拆分为52周和26周的DataFrame
+    df_52w = pd.DataFrame({
+        'trade_date': df_all['trade_date'],
+        'formatted_date': df_all['formatted_date'],
+        'date': df_all['date'],
+        'high_count': df_all['high_count_52w'],
+        'low_count': df_all['low_count_52w'],
+        'net_high': df_all['net_high_52w']
+    })
+    
+    df_26w = pd.DataFrame({
+        'trade_date': df_all['trade_date'],
+        'formatted_date': df_all['formatted_date'],
+        'date': df_all['date'],
+        'high_count': df_all['high_count_26w'],
+        'low_count': df_all['low_count_26w'],
+        'net_high': df_all['net_high_26w']
+    })
+    
+    return df_52w, df_26w
+
+def analyze_high_low(token=None, end_date=None, days=30, force_update=False, save_fig=True, show_fig=False):
     """
     分析指定时间段内的新高新低股票数量
     
@@ -207,7 +440,7 @@ def analyze_high_low(token=None, end_date=None, days=30, week_counts=[52, 26], s
     token: Tushare API token
     end_date: 结束日期，格式为'YYYYMMDD'，若为None则使用最近交易日
     days: 要分析的交易日天数，默认30天
-    week_counts: 周数列表，默认[52, 26]表示分析52周和26周的新高新低
+    force_update: 是否强制更新数据，即使数据库中已有最新数据
     save_fig: 是否保存图表，默认True
     show_fig: 是否显示图表，默认False
     
@@ -225,65 +458,24 @@ def analyze_high_low(token=None, end_date=None, days=30, week_counts=[52, 26], s
     if end_date is None:
         end_date = datetime.now().strftime('%Y%m%d')
     
-    # 获取所有A股股票
-    all_stocks = get_all_stocks(pro)
-    if all_stocks.empty:
-        print("无法获取股票列表")
+    # 准备数据 - 从数据库获取或更新
+    df_52w, df_26w = prepare_high_low_data(pro, end_date, days, force_update)
+    
+    if df_52w is None or df_26w is None:
+        logger.error("数据准备失败，无法进行分析")
         return None, None
     
-    # 计算开始日期（往前推days+10天，确保有足够的交易日）
-    date_obj = datetime.strptime(end_date, '%Y%m%d')
-    start_date = (date_obj - timedelta(days=days+10)).strftime('%Y%m%d')
+    # 绘制图表
+    if not df_52w.empty:
+        plot_high_low_chart(df_52w, 52, end_date, save_fig, show_fig)
     
-    # 获取交易日列表
-    trade_dates = get_trade_dates(pro, start_date, end_date)
-    if not trade_dates:
-        print("无法获取交易日期")
-        return None, None
+    if not df_26w.empty:
+        plot_high_low_chart(df_26w, 26, end_date, save_fig, show_fig)
     
-    # 只取最近days天的交易日
-    recent_trade_dates = trade_dates[-days:] if len(trade_dates) >= days else trade_dates
+    # 分析结果
+    logger.info(f"新高新低分析完成，数据时间范围: {df_52w['formatted_date'].iloc[0]} 至 {df_52w['formatted_date'].iloc[-1]}")
     
-    # 创建结果字典，用于存储每个周期的分析结果
-    results = {}
-    
-    # 对每个周期进行分析
-    for week_count in week_counts:
-        print(f"\n开始分析{week_count}周新高新低...")
-        
-        # 存储该周期的结果
-        week_results = []
-        
-        # 分析每个交易日
-        for trade_date in recent_trade_dates:
-            # 计算新高新低数量
-            high_count, low_count = calculate_high_low_for_date(pro, trade_date, week_count, all_stocks)
-            
-            # 计算净新高（新高数 - 新低数）
-            net_high = high_count - low_count
-            
-            # 保存结果
-            formatted_date = f"{trade_date[:4]}-{trade_date[4:6]}-{trade_date[6:]}"
-            week_results.append({
-                'trade_date': trade_date,
-                'formatted_date': formatted_date,
-                'high_count': high_count,
-                'low_count': low_count,
-                'net_high': net_high
-            })
-        
-        # 创建DataFrame
-        df_results = pd.DataFrame(week_results)
-        
-        # 保存结果
-        results[week_count] = df_results
-        
-        # 绘制图表
-        if not df_results.empty:
-            plot_high_low_chart(df_results, week_count, end_date, save_fig, show_fig)
-    
-    # 返回结果
-    return results.get(52), results.get(26)
+    return df_52w, df_26w
 
 def plot_high_low_chart(df, week_count, end_date, save_fig=True, show_fig=True):
     """
@@ -301,9 +493,6 @@ def plot_high_low_chart(df, week_count, end_date, save_fig=True, show_fig=True):
     """
     # 创建图表
     plt.figure(figsize=(12, 6), dpi=100)
-    
-    # 将日期转换为datetime格式以便于绘图
-    df['date'] = pd.to_datetime(df['trade_date'])
     
     # 绘制新高数量
     plt.plot(df['date'], df['high_count'], 'g-o', label=f'{week_count}周新高数', linewidth=2)
@@ -362,7 +551,7 @@ def plot_high_low_chart(df, week_count, end_date, save_fig=True, show_fig=True):
         filename = f"high_low_{week_count}w_{end_date}.png"
         plt.savefig(filename, dpi=120, bbox_inches='tight')
         fig_path = os.path.abspath(filename)
-        print(f"{week_count}周新高新低趋势图已保存至: {fig_path}")
+        logger.info(f"{week_count}周新高新低趋势图已保存至: {fig_path}")
     
     # 显示图表
     if show_fig:
@@ -374,32 +563,33 @@ def plot_high_low_chart(df, week_count, end_date, save_fig=True, show_fig=True):
 
 def main():
     """主函数"""
-    import argparse
-    
     parser = argparse.ArgumentParser(description='分析新高新低股票数量')
     parser.add_argument('--token', '-t', type=str, help='Tushare API Token')
     parser.add_argument('--date', '-d', type=str, help='分析结束日期，格式为YYYYMMDD，默认为最近交易日')
     parser.add_argument('--days', '-n', type=int, default=30, help='分析的天数，默认30天')
     parser.add_argument('--show', '-s', action='store_true', help='是否显示图表')
+    parser.add_argument('--force-update', '-f', action='store_true', help='强制更新数据')
+    parser.add_argument('--init-days', '-i', type=int, help='初始加载的天数，仅当数据库为空时使用')
     
     args = parser.parse_args()
     
     # 使用指定的token或默认token
     token = args.token if args.token else TUSHARE_TOKEN
     
-    print(f"开始分析新高新低股票数量，结束日期: {args.date or '最近交易日'}, 分析天数: {args.days}天")
+    logger.info(f"开始分析新高新低股票数量，结束日期: {args.date or '最近交易日'}, 分析天数: {args.days}天")
     
     # 分析新高新低
     df_52w, df_26w = analyze_high_low(
         token=token,
         end_date=args.date,
         days=args.days,
+        force_update=args.force_update,
         save_fig=True,
         show_fig=args.show
     )
     
     if df_52w is not None and df_26w is not None:
-        print(f"新高新低分析完成，共计算了 {len(df_52w)} 个交易日的数据")
+        logger.info(f"新高新低分析完成，共计算了 {len(df_52w)} 个交易日的数据")
 
 if __name__ == "__main__":
     main() 

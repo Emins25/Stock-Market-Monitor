@@ -255,6 +255,7 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
         token=token,
         end_date=end_date,
         days=high_low_days,
+        force_update=False,  # 只在需要时更新数据
         save_fig=True,
         show_fig=False
     )
