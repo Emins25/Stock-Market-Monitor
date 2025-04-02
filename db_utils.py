@@ -68,6 +68,9 @@ def create_tables():
         high REAL,
         low REAL,
         close REAL,
+        pre_close REAL,
+        change REAL,
+        pct_chg REAL,
         vol REAL,
         amount REAL,
         PRIMARY KEY (ts_code, trade_date)
@@ -147,7 +150,8 @@ def save_stock_daily_data(df_daily):
                 return 0
         
         # 添加缺失的列，填充空值
-        for col in ['vol', 'amount']:
+        optional_columns = ['pre_close', 'change', 'pct_chg', 'vol', 'amount']
+        for col in optional_columns:
             if col not in df_daily.columns:
                 df_daily[col] = None
         
@@ -362,4 +366,31 @@ def init_database():
     logger.info("数据库初始化完成")
 
 # 当模块加载时自动初始化数据库
-init_database() 
+init_database()
+
+def recreate_tables():
+    """清理所有表并重新创建数据库结构"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # 获取所有表名
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        tables = cursor.fetchall()
+        
+        # 删除所有表
+        for table in tables:
+            table_name = table[0]
+            cursor.execute(f"DROP TABLE IF EXISTS {table_name}")
+        
+        conn.commit()
+        logger.info("所有表已删除")
+        
+        # 重新创建表
+        create_tables()
+        
+        conn.close()
+        return True
+    except Exception as e:
+        logger.error(f"重建数据库表时出错: {e}")
+        return False 

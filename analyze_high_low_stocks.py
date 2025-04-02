@@ -78,7 +78,7 @@ try:
     from db_utils import (save_high_low_stats, get_high_low_stats, 
                         get_latest_trade_date_in_db, save_stock_daily_data,
                         get_stock_daily_data, update_db_status, get_db_status,
-                        clear_old_stock_data)
+                        clear_old_stock_data, recreate_tables)
 except ImportError:
     logger.error("未能导入数据库工具模块，请确保db_utils.py文件存在")
     # 定义空函数，防止程序崩溃
@@ -90,6 +90,7 @@ except ImportError:
     def update_db_status(*args, **kwargs): pass
     def get_db_status(*args, **kwargs): return None
     def clear_old_stock_data(*args, **kwargs): return 0
+    def recreate_tables(*args, **kwargs): return False
 
 # 全局变量
 TUSHARE_TOKEN = '284b804f2f919ea85cb7e6dfe617ff81f123c80b4cd3c4b13b35d736'
@@ -246,7 +247,7 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
     logger.info(f"{trade_date} {week_count}周新高数量: {high_count}, 新低数量: {low_count}")
     return high_count, low_count
 
-def initial_data_load(pro, end_date, days=90):
+def initial_data_load(pro, end_date, days=90, rebuild_db=False):
     """
     初始加载历史数据到数据库
     
@@ -254,11 +255,17 @@ def initial_data_load(pro, end_date, days=90):
     pro: tushare pro接口
     end_date: 结束日期，格式为'YYYYMMDD'
     days: 要加载的历史天数，默认90天
+    rebuild_db: 是否重建数据库，默认False
     
     返回:
     bool: 是否成功加载
     """
     logger.info(f"开始初始加载{days}天的历史新高新低数据...")
+    
+    # 如果需要，重建数据库
+    if rebuild_db:
+        logger.info("重建数据库表...")
+        recreate_tables()
     
     # 获取所有A股股票
     all_stocks = get_all_stocks(pro)
@@ -377,7 +384,7 @@ def incremental_update(pro, end_date):
     logger.info(f"增量更新完成，共更新了{total_dates}个交易日的数据")
     return True
 
-def prepare_high_low_data(pro, end_date, days=30, force_update=False):
+def prepare_high_low_data(pro, end_date, days=30, force_update=False, rebuild_db=False):
     """
     准备新高新低数据，根据需要执行初始加载或增量更新
     
@@ -386,6 +393,7 @@ def prepare_high_low_data(pro, end_date, days=30, force_update=False):
     end_date: 结束日期，格式为'YYYYMMDD'
     days: 要分析的天数
     force_update: 是否强制更新数据，即使数据库中已有最新数据
+    rebuild_db: 是否重建数据库，默认False
     
     返回:
     tuple: (52周新高新低DataFrame, 26周新高新低DataFrame)
@@ -397,7 +405,7 @@ def prepare_high_low_data(pro, end_date, days=30, force_update=False):
         # 如果数据库中没有数据，执行初始加载
         if not last_update:
             logger.info("数据库中没有历史数据，执行初始数据加载")
-            initial_data_load(pro, end_date, days=max(days, 90))  # 最少加载90天数据
+            initial_data_load(pro, end_date, days=max(days, 90), rebuild_db=rebuild_db)  # 最少加载90天数据
         else:
             # 执行增量更新
             logger.info(f"执行增量更新，上次更新: {last_update}, 当前日期: {end_date}")
@@ -432,7 +440,7 @@ def prepare_high_low_data(pro, end_date, days=30, force_update=False):
     
     return df_52w, df_26w
 
-def analyze_high_low(token=None, end_date=None, days=30, force_update=False, save_fig=True, show_fig=False):
+def analyze_high_low(token=None, end_date=None, days=30, force_update=False, rebuild_db=False, save_fig=True, show_fig=False):
     """
     分析指定时间段内的新高新低股票数量
     
@@ -441,6 +449,7 @@ def analyze_high_low(token=None, end_date=None, days=30, force_update=False, sav
     end_date: 结束日期，格式为'YYYYMMDD'，若为None则使用最近交易日
     days: 要分析的交易日天数，默认30天
     force_update: 是否强制更新数据，即使数据库中已有最新数据
+    rebuild_db: 是否重建数据库，默认False
     save_fig: 是否保存图表，默认True
     show_fig: 是否显示图表，默认False
     
@@ -459,7 +468,7 @@ def analyze_high_low(token=None, end_date=None, days=30, force_update=False, sav
         end_date = datetime.now().strftime('%Y%m%d')
     
     # 准备数据 - 从数据库获取或更新
-    df_52w, df_26w = prepare_high_low_data(pro, end_date, days, force_update)
+    df_52w, df_26w = prepare_high_low_data(pro, end_date, days, force_update, rebuild_db=rebuild_db)
     
     if df_52w is None or df_26w is None:
         logger.error("数据准备失败，无法进行分析")
@@ -569,6 +578,7 @@ def main():
     parser.add_argument('--days', '-n', type=int, default=30, help='分析的天数，默认30天')
     parser.add_argument('--show', '-s', action='store_true', help='是否显示图表')
     parser.add_argument('--force-update', '-f', action='store_true', help='强制更新数据')
+    parser.add_argument('--rebuild-db', '-r', action='store_true', help='重建数据库')
     parser.add_argument('--init-days', '-i', type=int, help='初始加载的天数，仅当数据库为空时使用')
     
     args = parser.parse_args()
@@ -584,6 +594,7 @@ def main():
         end_date=args.date,
         days=args.days,
         force_update=args.force_update,
+        rebuild_db=args.rebuild_db,
         save_fig=True,
         show_fig=args.show
     )
