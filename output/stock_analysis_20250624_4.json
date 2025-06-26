@@ -1,0 +1,42 @@
+[
+  {
+    "ts_code": "002080.SZ",
+    "name": "中材科技",
+    "industry": "玻璃",
+    "trade_date": "20250624",
+    "last_close": 20.07774568703065,
+    "total_mv": 3015588.0804,
+    "recent_return": 0.08318264014466559,
+    "rebound_ratio": 0.277848788209876
+  },
+  {
+    "ts_code": "002309.SZ",
+    "name": "ST中利",
+    "industry": "电气设备",
+    "trade_date": "20250624",
+    "last_close": 3.39,
+    "total_mv": 1019598.5655,
+    "recent_return": 0.11147540983606574,
+    "rebound_ratio": 0.23699421965317916
+  },
+  {
+    "ts_code": "002539.SZ",
+    "name": "云图控股",
+    "industry": "农药化肥",
+    "trade_date": "20250624",
+    "last_close": 10.099088925348648,
+    "total_mv": 1114729.0323,
+    "recent_return": 0.09489916963226586,
+    "rebound_ratio": 0.2122660963660212
+  },
+  {
+    "ts_code": "601330.SH",
+    "name": "绿色动力",
+    "industry": "环境保护",
+    "trade_date": "20250624",
+    "last_close": 8.353528023598821,
+    "total_mv": 1061811.2188,
+    "recent_return": 0.03532608695652173,
+    "rebound_ratio": 0.3782839925668098
+  }
+]

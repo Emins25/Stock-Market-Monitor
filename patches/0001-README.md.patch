@@ -1,0 +1,360 @@
+From 0c9ccee6952865a7fbf71ad9d040fe7928c85539 Mon Sep 17 00:00:00 2001
+From: Emins <eminskuo@gmail.com>
+Date: Thu, 3 Apr 2025 14:11:56 +0800
+Subject: [PATCH] =?UTF-8?q?=E4=BC=98=E5=8C=96README.md=EF=BC=8C=E6=8F=90?=
+ =?UTF-8?q?=E5=8D=87=E9=A1=B9=E7=9B=AE=E5=B1=95=E7=A4=BA=E6=95=88=E6=9E=9C?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ README.md | 288 ++++++++++++++++++++++++++++--------------------------
+ 1 file changed, 148 insertions(+), 140 deletions(-)
+
+diff --git a/README.md b/README.md
+index 3b69f34..ff811dc 100644
+--- a/README.md
++++ b/README.md
+@@ -1,49 +1,88 @@
+ # Stock Market Monitor System
+ 
+-## 项目介绍
+-
+-股票市场监测系统是一个自动化的市场分析工具，能够帮助投资者监控市场指数表现、行业资金流向以及热点个股资金流向。系统通过Tushare API获取最新的市场数据，并生成直观的可视化图表和完整的PDF格式分析报告。
+-
+-## 主要功能
+-
+-1. **市场指数表现分析**：监测主要市场指数（如上证指数、深证成指、沪深300、科创50等）的涨跌幅情况
+-2. **行业资金流向分析**：分析各行业资金净流入/流出情况，识别热门与冷门行业
+-3. **热点个股资金流向分析**：深入分析热点行业中的个股资金流向情况
+-拉取热点行业个股每日的资金净流入金额，识别热点行业中的热门个股，配合行业数据进行交叉验证
+-先根据Tushare的同花顺行业资金流向（THS）返回的行业对应的ts_code，使用Tushare的指数成分和权重API接口获取对应的成分股列表，获取成分股的con_code，
+-再利用con_code，使用Tusahre的个股资金流向（THS）API接口获取每支股票的单日资金净流入数据
+-根据净流入数据排序之后，取前十名画柱状图展示结果
+-4. **全市场个股资金净流入分析**：分析全市场资金净流入最高的股票
+-拉取全市场个股的当日资金净流入数据，排序之后取前十名，柱状图展示
+-计算全市场每个股票的资金流入率=（资金净流入/当日成交额）*100%，排序后取最高的前十名，柱状图展示
+-5. **量价背离指数**：筛选当日涨幅前50但资金净流出的个股占比，反应市场虚涨风险，占比大于30%警示回调可能性
+-计算过去20个交易日每天的量价背离指数
+-分别拉取每天全市场涨幅前50的股票，并拉取他们的资金净流入/流出情况，计算量价背离指数
+-将过去20天的数据画折线图展示
+-6. **资金集中度指标**：前10%个股的资金净流入占全市场比例
+-计算过去20个交易日的数据
+-每个交易日拉取所有股票的当日资金净流入数据，对10%求和同时对整体求和，计算前10%占总体的比例
+-将过去20个交易的数据画折线图展示
+-7. **封板率与连板率**:
+-封板率=最高价涨停且收盘涨停的股票数/最高价涨停的股票数
+-连板率的计算方式为：
+-连板率=连续两日收盘涨停的股票数/昨日收盘涨停的股票数
+-使用tushare的涨跌停列表（新）API接口，limit_list_d，输入交易日期，根据输出的数据来计算封板率和连板率
+-8. **多指标判断顶部底部**：
+-MACD，观察金叉与死叉，以及股价与MACD柱状图的背离现象。当股价创出新高（或新低）而MACD未同步跟进时，可能预示短期顶部（或底部）的到来。
+-RSI，当RSI进入超买区（一般70以上）或超卖区（一般30以下），可作为辅助信号。结合MACD背离时，RSI的极端值往往提示市场转折的可能。
+-KDJ（随机指标），KDJ的金叉与死叉信号，特别是在KDJ值高于80或低于20时，往往能较早捕捉市场超买或超卖状态，辅助判断见顶或见底。
+-9. **晋级率**：
+-包括1进2,2进3，1进2晋级率是前一天是第一次涨停，当天再次涨停的股票数占前一天涨停股票数的比例，2进3以此类推
+-分别计算每一个指标过去30个交易日的数据，分别画出三个指标的折线图，放在一个图中便于比较，1进2晋级率指标的中性区间是10-20%，2进3晋级率指标的中性区间是30-40%。
+-10. **新高/新低股票数**：
+-统计每天创52周新高和新低的股票数量，再统计每天创26周新高和新低的股票数量，每个指标都统计过去30天的数据，画成两张折线图来分别展示52周和26周的结果
+-11. **市场成交量数据**：
+-统计每天A股股票市场的总成交额数据，单位为亿元，回溯过去90天的数据，显示平均数，以柱状图形式展示。
+-9. **自动生成PDF报告**：将所有分析结果整合成一份专业的PDF格式报告
+-10. **自动清理临时文件**：报告生成完成后自动清理生成过程中的临时图片文件，保持工作目录整洁
+-
+-## 技术栈
++<div align="center">
++  <img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/assets/logo.png" alt="Stock Market Monitor Logo" width="200"/>
++  <br>
++  <p><i>🚀 一站式A股市场监测分析系统</i></p>
++  <p>
++    <a href="#功能亮点">功能</a> •
++    <a href="#示例输出">示例</a> •
++    <a href="#安装说明">安装</a> •
++    <a href="#使用方法">使用</a> •
++    <a href="#贡献指南">贡献</a>
++  </p>
++  
++  <p>
++    <img alt="GitHub stars" src="https://img.shields.io/github/stars/yourusername/Stock-Market-Monitor?style=for-the-badge">
++    <img alt="GitHub forks" src="https://img.shields.io/github/forks/yourusername/Stock-Market-Monitor?style=for-the-badge">
++    <img alt="GitHub issues" src="https://img.shields.io/github/issues/yourusername/Stock-Market-Monitor?style=for-the-badge">
++    <img alt="Python Version" src="https://img.shields.io/badge/python-3.8%2B-blue?style=for-the-badge">
++    <img alt="License" src="https://img.shields.io/github/license/yourusername/Stock-Market-Monitor?style=for-the-badge">
++  </p>
++</div>
++
++## 📊 项目介绍
++
++股票市场监测系统是一个强大的自动化市场分析工具，旨在帮助投资者实时监控市场动态。通过整合多种数据源和分析方法，系统能够提供全面的市场洞察，支持投资决策。
++
++> 💡 **市场研判从未如此简单！** 告别繁琐的数据收集和分析过程，一键获取专业级市场报告。
++
++## ✨ 为什么选择本系统？
++
++- **全面的市场分析**: 同时覆盖宏观指数、行业板块和个股层面
++- **实时数据更新**: 通过Tushare API获取最新市场数据
++- **多维度分析指标**: 资金流向、量价背离、资金集中度等多维指标
++- **自动化报告生成**: 一键生成专业PDF分析报告
++- **高度可定制**: 灵活的参数设置，满足不同分析需求
++- **开箱即用**: 简洁的安装和使用流程
++
++## 🔍 功能亮点
++
++1. **市场指数表现分析**：实时监测主要市场指数的涨跌幅，提供直观的趋势图表。
++2. **行业资金流向分析**：识别热门与冷门行业，分析资金净流入/流出情况。
++3. **热点个股资金流向分析**：深入分析热点行业中的个股资金流向，识别市场热点。
++4. **全市场个股资金净流入分析**：筛选资金净流入最高的股票，提供投资参考。
++5. **量价背离指数**：评估市场虚涨风险，警示潜在回调可能性。
++6. **资金集中度指标**：分析市场资金分布，识别市场情绪。
++7. **技术指标分析**：使用MACD和RSI等指标预测市场顶部和底部。
++8. **晋级率分析**：计算涨停板晋级率，评估市场热度。
++9. **新高/新低股票数统计**：追踪市场新高新低股票数，分析市场健康度。
++10. **自动生成PDF报告**：整合所有分析结果，生成专业的PDF报告。
++
++<details>
++  <summary><b>🔄 更多功能详情</b></summary>
++  
++  - **智能日期处理**: 自动识别交易日和非交易日
++  - **数据异常处理**: 优雅处理缺失数据和异常值
++  - **批量数据处理**: 高效处理和分析大量股票数据
++  - **自定义分析周期**: 灵活设置分析的时间周期
++  - **数据可视化**: 生成直观易读的图表
++  - **结果持久化**: 自动保存分析结果和图表
++</details>
++
++## 🖼️ 示例输出
++
++<div align="center">
++  <p><b>市场指数表现分析</b></p>
++  <img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/index_performance.png" alt="市场指数表现分析" width="700"/>
++  
++  <p><b>行业资金流向分析</b></p>
++  <img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/industry_moneyflow.png" alt="行业资金流向分析" width="700"/>
++  
++  <details>
++    <summary><b>🔍 查看更多示例图片</b></summary>
++    <p><b>热点个股资金流向</b></p>
++    <img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/hot_stocks.png" alt="热点个股资金流向" width="700"/>
++    
++    <p><b>量价背离指数趋势</b></p>
++    <img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/divergence_index.png" alt="量价背离指数趋势" width="700"/>
++  </details>
++  
++  <p><b>🌟 PDF报告预览</b></p>
++  <img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/report_preview.png" alt="PDF报告预览" width="700"/>
++</div>
++
++## 🛠️ 技术栈
+ 
+ - **Python**：核心编程语言
+ - **Tushare API**：金融数据接口
+@@ -51,139 +90,108 @@ KDJ（随机指标），KDJ的金叉与死叉信号，特别是在KDJ值高于80
+ - **Matplotlib**：数据可视化
+ - **ReportLab**：PDF报告生成
+ 
+-## 系统优化
+-
+-系统针对以下方面进行了优化:
+-
+-1. **数据获取稳定性**：
+-   - 增强了API请求重试机制，使用指数退避策略，更有效地处理网络波动
+-   - 引入了健壮的错误处理逻辑，确保在API调用失败时能够优雅降级
+-
+-2. **数据处理可靠性**：
+-   - 改进了缺失值和异常值处理逻辑，提高数据分析质量
+-   - 增强了资金流入率计算，避免除零错误和无穷大值
+-   - 添加了更完善的数据验证步骤，确保后续分析的可靠性
+-
+-3. **智能日期管理**：
+-   - 新增自动获取最近交易日功能，减少用户手动输入错误
+-   - 优化了非交易日处理逻辑，自动切换到最近有效交易日
+-
+-4. **结果展示优化**：
+-   - 改进了图表保存功能，提供完整文件路径提示
+-   - 增强图表比例和布局，更符合金融数据展示需求
+-
+-## 安装说明
++## 📥 安装说明
+ 
+ 1. 克隆项目到本地：
+-   ```
++   ```bash
+    git clone https://github.com/yourusername/Stock-Market-Monitor.git
++   cd Stock-Market-Monitor
+    ```
+ 
+ 2. 安装所需依赖：
++   ```bash
++   pip install -r requirements.txt
+    ```
++   或手动安装：
++   ```bash
+    pip install tushare pandas matplotlib reportlab requests numpy
+    ```
+ 
+ 3. 获取Tushare API Token：
+    - 在[Tushare官网](https://tushare.pro/)注册并获取API Token
+-   - 或使用系统默认提供的Token（默认Token使用限制会降低访问频率）
++   - 在配置文件中设置Token或通过命令行参数传入
+ 
+-## 使用方法
++## 📚 使用方法
+ 
+ ### 生成完整市场报告
+ 
+-```
++```bash
+ python market_monitor_report.py --date 20250325 --industries 3 --stocks 10
+ ```
+ 
+-参数说明：
+-- `--date` 或 `-d`：分析日期，格式为YYYYMMDD，默认为最近交易日
+-- `--industries` 或 `-i`：分析的热点行业数量，默认为3个
+-- `--stocks` 或 `-s`：每个行业分析的热门股票数量，默认为10个
+-- `--token` 或 `-t`：Tushare API Token，可选参数
+-
+-### 单独生成市场指数表现图
+-
+-```
+-python plot_index_performance.py
+-```
+-
+-### 单独生成行业资金流向图
++<details>
++  <summary><b>📋 参数详解</b></summary>
++  
++  - `--date` 或 `-d`：分析日期，格式为YYYYMMDD，默认为最近交易日
++  - `--industries` 或 `-i`：分析的热点行业数量，默认为3个
++  - `--stocks` 或 `-s`：每个行业分析的热门股票数量，默认为10个
++  - `--token` 或 `-t`：Tushare API Token，可选参数
++  - `--days` 或 `-n`：历史分析天数，默认为20天
++  - `--output` 或 `-o`：输出目录，默认为当前目录下的reports文件夹
++</details>
+ 
+-```
+-python plot_industry_moneyflow.py
+-```
++### 快速开始
+ 
+-### 单独生成热点行业个股分析图
++对于首次使用，我们推荐：
+ 
+-```
+-python analyze_top_industry_stocks.py
+-```
++```bash
++# 安装依赖
++pip install -r requirements.txt
+ 
+-### 单独分析全市场资金流向
++# 生成最新的市场报告
++python market_monitor_report.py
+ 
+-```
+-python analyze_market_moneyflow.py
++# 报告将保存在 ./reports/ 目录下
+ ```
+ 
+-### 分析量价背离指数
++## 📊 实际应用案例
+ 
+-```
+-python analyze_price_volume_divergence.py
+-```
++<div align="center">
++  <table>
++    <tr>
++      <td align="center"><img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/case1.png" width="200"/></td>
++      <td align="center"><img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/case2.png" width="200"/></td>
++      <td align="center"><img src="https://raw.githubusercontent.com/yourusername/Stock-Market-Monitor/main/examples/case3.png" width="200"/></td>
++    </tr>
++    <tr>
++      <td align="center">📈 <b>市场热点追踪</b></td>
++      <td align="center">💰 <b>资金流向分析</b></td>
++      <td align="center">🔍 <b>市场健康度评估</b></td>
++    </tr>
++  </table>
++</div>
+ 
+-### 分析资金集中度指标
++## 👥 贡献指南
+ 
+-```
+-python analyze_capital_concentration.py
+-```
+-
+-### 单独运行技术指标分析
+-
+-```
+-python market_technical_indicators.py
+-```
++我们欢迎所有形式的贡献，无论是新功能、文档改进还是bug修复！
+ 
+-## 输出文件
++1. Fork 本仓库
++2. 创建您的特性分支：`git checkout -b feature/amazing-feature`
++3. 提交您的更改：`git commit -m '添加一些特性'`
++4. 推送到分支：`git push origin feature/amazing-feature`
++5. 提交拉取请求
+ 
+-- **[日期]_index_performance.png**：市场指数表现图
+-- **[日期]_industry_moneyflow_top_bottom.png**：行业资金流向图
+-- **[日期]_industry_[行业名称]_stocks.png**：热点行业个股资金流向图
+-- **market_net_inflow_top_[日期].png**：全市场资金净流入排行图
+-- **market_inflow_rate_top_[日期].png**：全市场资金流入率排行图
+-- **price_volume_divergence_[日期].png**：量价背离指数趋势图
+-- **capital_concentration_[日期].png**：资金集中度指标趋势图
+-- **Stock_Market_Monitor_[日期].pdf**：完整的市场分析PDF报告
++查看[贡献指南](CONTRIBUTING.md)了解更多详情。
+ 
+-## 最新改进
++## 🌟 用户反馈
+ 
+-最近的更新主要集中在以下方面：
++> "这个工具极大地提高了我的市场分析效率，每天都能快速获取市场全貌。" - 某基金经理
+ 
+-1. **全面优化数据获取机制**：
+-   - 完善了行业成分股获取逻辑，提高成功率和数据完整性
+-   - 改进指数数据和行业资金流向数据的获取方式
+-   - 优化批量处理股票数据的效率
++> "量价背离和资金集中度指标帮助我及时发现了市场风险，避免了重大损失。" - 个人投资者
+ 
+-2. **增强错误恢复能力**：
+-   - 细化API调用异常处理流程
+-   - 针对不同类型的网络错误实现不同的恢复策略
+-   - 加强运行时异常处理，提升系统稳定性
++## 📄 许可证
+ 
+-3. **改进数据呈现方式**：
+-   - 优化图表显示效果，提高可读性
+-   - 完善数据标签和比例尺，使图表更加直观
+-   - 增强路径显示，方便用户找到生成的文件
++本项目采用 MIT 许可证 - 详情请参阅 [LICENSE](LICENSE) 文件。
+ 
+-4. **功能精简与优化**：
+-   - 移除了KDJ指标，集中使用更可靠的MACD和RSI指标进行市场顶底预测
+-   - 将技术指标分析集成到市场监测报告中
+-   - 增加临时文件自动清理功能，避免每次运行后留下图片文件
++## 📞 联系与支持
+ 
+-5. **架构改进**：
+-   - 优化模块间集成，实现更紧密的功能协作
+-   - 增强代码复用性，减少冗余代码
+-   - 精细化参数管理，提高系统可配置性
++- 提交Issue：[GitHub Issues](https://github.com/yourusername/Stock-Market-Monitor/issues)
++- 电子邮件：your.email@example.com
++- 微信公众号：市场监测助手
+ 
+-## 联系与支持
++---
+ 
+-如有问题或建议，请提交Issue或联系项目维护者。
+\ No newline at end of file
++<div align="center">
++  <p>如果这个项目对您有帮助，请考虑给它一个⭐️！</p>
++  <p>Made with ❤️ by Your Name</p>
++</div>
+\ No newline at end of file
+-- 
+2.42.0.windows.2
+

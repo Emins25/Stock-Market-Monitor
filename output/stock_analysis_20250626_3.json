@@ -1,0 +1,32 @@
+[
+  {
+    "ts_code": "000001.SZ",
+    "name": "平安银行",
+    "industry": "银行",
+    "trade_date": "20250626",
+    "last_close": 14.612735637318847,
+    "total_mv": 24082744.4837,
+    "recent_return": 0.0625,
+    "rebound_ratio": 0.3722110733722047
+  },
+  {
+    "ts_code": "002309.SZ",
+    "name": "ST中利",
+    "industry": "电气设备",
+    "trade_date": "20250626",
+    "last_close": 3.5,
+    "total_mv": 1052682.8848,
+    "recent_return": 0.1217948717948718,
+    "rebound_ratio": 0.24971098265895955
+  },
+  {
+    "ts_code": "601528.SH",
+    "name": "瑞丰银行",
+    "industry": "银行",
+    "trade_date": "20250626",
+    "last_close": 8.788122000000001,
+    "total_mv": 1183183.3212,
+    "recent_return": 0.016863406408094583,
+    "rebound_ratio": 0.24752957019984514
+  }
+]

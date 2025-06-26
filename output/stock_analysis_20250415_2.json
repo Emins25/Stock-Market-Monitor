@@ -1,0 +1,22 @@
+[
+  {
+    "ts_code": "002487.SZ",
+    "name": "大金重工",
+    "industry": "电气设备",
+    "trade_date": "20250415",
+    "last_close": 26.442308692824625,
+    "total_mv": 1668990.0463,
+    "recent_return": 0.09819555182543027,
+    "rebound_ratio": 0.38912230268350856
+  },
+  {
+    "ts_code": "600315.SH",
+    "name": "上海家化",
+    "industry": "日用化工",
+    "trade_date": "20250415",
+    "last_close": 22.643786610878664,
+    "total_mv": 1468813.7663,
+    "recent_return": 0.11936475409836067,
+    "rebound_ratio": 0.17099071507239186
+  }
+]
