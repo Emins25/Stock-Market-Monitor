@@ -18,6 +18,11 @@ from datetime import datetime, timedelta
 import time
 import requests
 import os
+import warnings
+
+# 抑制pandas警告信息
+warnings.filterwarnings('ignore', category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings('ignore', message='.*SettingWithCopyWarning.*')
 
 # 设置matplotlib支持中文显示
 plt.rcParams['font.sans-serif'] = ['SimHei']  # 设置默认字体为黑体
@@ -179,8 +184,9 @@ def get_stocks_moneyflow(pro, stock_list, trade_date):
         
         # 确保净流入金额列存在
         if 'net_mf_amount' in filtered_data.columns:
-            filtered_data['net_mf_amount'] = pd.to_numeric(filtered_data['net_mf_amount'], errors='coerce')
-            filtered_data['net_amount'] = filtered_data['net_mf_amount']
+            filtered_data = filtered_data.copy()  # 创建副本避免警告
+            filtered_data.loc[:, 'net_mf_amount'] = pd.to_numeric(filtered_data['net_mf_amount'], errors='coerce')
+            filtered_data.loc[:, 'net_amount'] = filtered_data['net_mf_amount']
             print("已将net_mf_amount复制为net_amount以保持代码兼容性")
         elif 'buy_amount' in filtered_data.columns and 'sell_amount' in filtered_data.columns:
             filtered_data['net_amount'] = filtered_data['buy_amount'] - filtered_data['sell_amount']

@@ -11,7 +11,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
 import platform
 
-def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stocks=None):
+def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stocks=None, ai_analysis=None):
     """
     创建市场监测PDF报告
     
@@ -378,36 +378,17 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 11. 结论
-    content.append(Paragraph("11. 市场监测结论", subtitle_style))
-    
-    conclusion_text = """
-    基于以上分析，我们对当前市场状况得出以下结论：
-    
-    1. 大盘指数表现：关注沪深300、上证指数的强弱变化，以及创业板、科创板的表现差异。
-    
-    2. 行业资金流向：识别主导市场方向的强势行业，特别关注连续获得资金流入的行业。
-    
-    3. 个股资金流向：重点关注大额资金净流入的个股，它们往往代表着市场的主流方向。
-    
-    4. 量价背离指数：警惕虚假上涨行情，当价格上涨但资金流出时，增加风险控制。
-    
-    5. 资金集中度：评估市场是否存在明显热点，集中度过高时注意热点轮动风险。
-    
-    6. 上涨/下跌比例：全面了解市场整体强弱，作为重要的市场宽度指标。
-    
-    7. RSI技术指标：通过监测RSI超买超卖区域及背离现象，识别潜在的市场顶底位置。
-    
-    8. 涨停板晋级率：通过跟踪连板效应评估市场强度，晋级率高低反映市场赚钱效应。
-    
-    9. 新高/新低股票数：观察市场结构健康程度，新高数减少或新低数增多往往是市场转向的先导信号。
-    
-    10. 优质新高股票：筛选出兼具技术和基本面条件的优质新高股票，为投资决策提供候选名单。
-    
-    综合判断：通过以上十个维度的综合分析，形成对市场的整体研判，指导投资决策。
-    """
-    
-    content.append(Paragraph(conclusion_text, normal_style))
+    # 11. AI市场分析点评总结
+    if ai_analysis:
+        content.append(Paragraph("11. AI市场分析点评总结", subtitle_style))
+        content.append(Spacer(1, 10))
+        
+        # 将AI分析内容按段落分割并添加
+        ai_paragraphs = ai_analysis.split('\n\n')
+        for paragraph in ai_paragraphs:
+            if paragraph.strip():
+                content.append(Paragraph(paragraph.strip(), normal_style))
+                content.append(Spacer(1, 8))
     
     # 添加页眉页脚
     def add_page_number(canvas, doc):

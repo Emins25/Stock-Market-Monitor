@@ -48,6 +48,13 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from cycler import cycler
 import tushare as ts
+import warnings
+
+# 抑制pandas警告和其他不必要的警告信息
+warnings.filterwarnings('ignore', category=pd.errors.SettingWithCopyWarning)
+warnings.filterwarnings('ignore', message='.*SettingWithCopyWarning.*')
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', category=UserWarning)
 from plot_index_performance import plot_index_performance
 from plot_industry_moneyflow import plot_industry_moneyflow
 # 注释掉热点行业个股分析的导入
@@ -66,6 +73,8 @@ from analyze_limit_promotion_rate import analyze_limit_stocks
 from analyze_high_low_stocks import analyze_high_low
 # 导入创新高优质股票筛选模块
 from new_high_stock_strategy import filter_stocks_for_report, generate_filtered_stocks_plot
+# 导入市场分析AI模块
+from market_analysis_ai import generate_market_analysis_summary
 
 # 设置统一的图表样式
 def set_global_chart_style():
@@ -302,9 +311,74 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     print(f"创新高优质股票筛选完成")
     
-    # 11. 生成PDF报告
-    print("\n正在生成PDF报告...")
-    report_filename = f"Stock_Market_Monitor_{end_date}.pdf"
+    # 11. 生成AI分析点评总结
+    print("\n[11/13] 正在生成AI分析点评总结...")
+    
+    # 收集所有分析数据
+    market_analysis_data = {
+        'index_data': {},  # 指数数据会在后面填充
+        'industry_data': {
+            'top_industries': df_industry.head(10).to_dict('records') if df_industry is not None and len(df_industry) > 0 else []
+        },
+        'stock_moneyflow_data': {
+            'net_inflow_top': net_inflow_top.head(10).to_dict('records') if net_inflow_top is not None and len(net_inflow_top) > 0 else []
+        },
+        'divergence_data': {
+            'latest_value': float(df_divergence.iloc[-1]['divergence_index']) if df_divergence is not None and len(df_divergence) > 0 else 0,
+            'avg_value': float(df_divergence['divergence_index'].mean()) if df_divergence is not None and len(df_divergence) > 0 else 0
+        },
+        'concentration_data': {
+            'latest_value': float(df_concentration.iloc[-1]['concentration_index']) if df_concentration is not None and len(df_concentration) > 0 else 0,
+            'avg_value': float(df_concentration['concentration_index'].mean()) if df_concentration is not None and len(df_concentration) > 0 else 0
+        },
+        'up_down_ratio_data': {
+            'latest_value': float(df_ratio.iloc[-1]['up_down_ratio']) if df_ratio is not None and len(df_ratio) > 0 else 0,
+            'avg_value': float(df_ratio['up_down_ratio'].mean()) if df_ratio is not None and len(df_ratio) > 0 else 0
+        },
+        'technical_data': {
+            'rsi_value': 50,  # 默认值，实际值会在后面更新
+            'trend_signal': tech_prediction if tech_prediction is not None and not tech_prediction.empty else '中性'
+        },
+        'promotion_data': {
+            'promotion_1to2': float(df_promotion.iloc[-1]['promotion_rate_1to2']) if df_promotion is not None and len(df_promotion) > 0 else 0,
+            'promotion_2to3': float(df_promotion.iloc[-1]['promotion_rate_2to3']) if df_promotion is not None and len(df_promotion) > 0 else 0
+        },
+        'high_low_data': {
+            'new_high_52w': int(df_52w.iloc[-1]['high_count']) if df_52w is not None and len(df_52w) > 0 else 0,
+            'new_low_52w': int(df_52w.iloc[-1]['low_count']) if df_52w is not None and len(df_52w) > 0 else 0,
+            'new_high_26w': int(df_26w.iloc[-1]['high_count']) if df_26w is not None and len(df_26w) > 0 else 0,
+            'new_low_26w': int(df_26w.iloc[-1]['low_count']) if df_26w is not None and len(df_26w) > 0 else 0
+        },
+        'filtered_stocks_data': {
+            'stock_count': len(filtered_stocks) if filtered_stocks else 0
+        }
+    }
+    
+    # 添加指数数据
+    if df_index is not None and len(df_index) > 0:
+        index_data = {}
+        for _, row in df_index.iterrows():
+            ts_code = row.get('ts_code', '')
+            if ts_code in index_names:
+                index_data[ts_code] = {
+                    'name': index_names[ts_code],
+                    'pct_chg': float(row.get('pct_chg', 0))
+                }
+        market_analysis_data['index_data'] = index_data
+    
+    # 调用AI生成分析点评
+    try:
+        ai_analysis_summary = generate_market_analysis_summary(market_analysis_data)
+        print("AI分析点评总结生成完成")
+    except Exception as e:
+        print(f"生成AI分析点评时出错: {e}")
+        ai_analysis_summary = "由于技术原因，无法生成AI分析点评总结。请参考以上各项数据指标进行综合分析。"
+    
+    # 12. 生成PDF报告
+    print("\n[12/13] 正在生成PDF报告...")
+    # 添加时间戳避免文件被占用的问题
+    timestamp = datetime.now().strftime("%H%M%S")
+    report_filename = f"Stock_Market_Monitor_{end_date}_{timestamp}.pdf"
     # 创建reports目录（如果不存在）
     reports_dir = "reports"
     if not os.path.exists(reports_dir):
@@ -318,10 +392,10 @@ def generate_market_report(date=None, top_industry_count=3, top_stock_count=10, 
     
     # 在reports目录下生成报告
     report_path = os.path.join(reports_dir, report_filename)
-    create_pdf_report(output_filename=report_path, filtered_stocks=filtered_stocks_data)
+    create_pdf_report(output_filename=report_path, filtered_stocks=filtered_stocks_data, ai_analysis=ai_analysis_summary)
     
-    # 12. 清理临时图片文件
-    print("\n清理临时图片文件...")
+    # 13. 清理临时图片文件
+    print("\n[13/13] 清理临时图片文件...")
     clean_temp_files(end_date)
     
     end_time = datetime.now()
@@ -388,7 +462,7 @@ def main():
     
     # 使用命令行参数生成报告
     generate_market_report(
-        date='20250626',  # 使用命令行参数指定的日期
+        date='20250627',  # 使用命令行参数指定的日期
         top_industry_count=args.industries, 
         top_stock_count=args.stocks,
         token=args.token,
