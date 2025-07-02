@@ -192,8 +192,22 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     content.append(Paragraph(f"报告日期：{today}", subtitle_style))
     content.append(Spacer(1, 20))
     
-    # 1. 市场指数表现
-    content.append(Paragraph("1. 市场指数表现", subtitle_style))
+    # 1. AI市场分析点评总结（优先展示）
+    if ai_analysis:
+        content.append(Paragraph("1. AI市场分析点评总结", subtitle_style))
+        content.append(Spacer(1, 10))
+        
+        # 将AI分析内容按段落分割并添加
+        ai_paragraphs = ai_analysis.split('\n\n')
+        for paragraph in ai_paragraphs:
+            if paragraph.strip():
+                content.append(Paragraph(paragraph.strip(), normal_style))
+                content.append(Spacer(1, 8))
+        
+        content.append(Spacer(1, 15))
+    
+    # 2. 市场指数表现
+    content.append(Paragraph("2. 市场指数表现", subtitle_style))
     index_fig = get_latest_figure("index_performance_*.png")
     if index_fig:
         img = Image(index_fig, width=6.5*inch, height=3.5*inch)
@@ -203,8 +217,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 2. 行业资金流向
-    content.append(Paragraph("2. 行业资金流向分析", subtitle_style))
+    # 3. 行业资金流向
+    content.append(Paragraph("3. 行业资金流向分析", subtitle_style))
     industry_fig = get_latest_figure("industry_moneyflow_top_bottom_*.png")
     if industry_fig:
         img = Image(industry_fig, width=6.5*inch, height=3.5*inch)
@@ -214,8 +228,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 3. 全市场个股资金净流入
-    content.append(Paragraph("3. 全市场个股资金净流入排行", subtitle_style))
+    # 4. 全市场个股资金净流入
+    content.append(Paragraph("4. 全市场个股资金净流入排行", subtitle_style))
     
     # 资金净流入排行图
     inflow_fig = get_latest_figure("market_net_inflow_top_*.png")
@@ -235,8 +249,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 4. 量价背离指数分析
-    content.append(Paragraph("4. 量价背离指数分析", subtitle_style))
+    # 5. 量价背离指数分析
+    content.append(Paragraph("5. 量价背离指数分析", subtitle_style))
     divergence_fig = get_latest_figure("price_volume_divergence_index_*.png")
     if divergence_fig:
         img = Image(divergence_fig, width=6.5*inch, height=3.5*inch)
@@ -247,8 +261,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 5. 资金集中度指标分析
-    content.append(Paragraph("5. 资金集中度指标分析", subtitle_style))
+    # 6. 资金集中度指标分析
+    content.append(Paragraph("6. 资金集中度指标分析", subtitle_style))
     concentration_fig = get_latest_figure("capital_concentration_index_*.png")
     if concentration_fig:
         img = Image(concentration_fig, width=6.5*inch, height=3.5*inch)
@@ -259,8 +273,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 6. 上涨/下跌股票比值分析
-    content.append(Paragraph("6. 上涨/下跌股票比值分析", subtitle_style))
+    # 7. 上涨/下跌股票比值分析
+    content.append(Paragraph("7. 上涨/下跌股票比值分析", subtitle_style))
     up_down_ratio_fig = get_latest_figure("up_down_ratio_*.png")
     if up_down_ratio_fig:
         img = Image(up_down_ratio_fig, width=6.5*inch, height=3.5*inch)
@@ -271,8 +285,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 7. 技术指标分析
-    content.append(Paragraph("7. 技术指标分析", subtitle_style))
+    # 8. 技术指标分析
+    content.append(Paragraph("8. 技术指标分析", subtitle_style))
     tech_fig = get_latest_figure("market_rsi_analysis_*.png")
     if tech_fig:
         img = Image(tech_fig, width=6.5*inch, height=3.5*inch)
@@ -283,8 +297,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 8. 涨停板晋级率分析
-    content.append(Paragraph("8. 涨停板晋级率分析", subtitle_style))
+    # 9. 涨停板晋级率分析
+    content.append(Paragraph("9. 涨停板晋级率分析", subtitle_style))
     promotion_fig = get_latest_figure("limit_promotion_rate_*.png")
     if promotion_fig:
         img = Image(promotion_fig, width=6.5*inch, height=3.5*inch)
@@ -295,8 +309,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 9. 新高/新低股票数分析
-    content.append(Paragraph("9. 新高/新低股票数分析", subtitle_style))
+    # 10. 新高/新低股票数分析
+    content.append(Paragraph("10. 新高/新低股票数分析", subtitle_style))
     
     # 52周新高/新低图
     high_low_52w_fig = get_latest_figure("high_low_52w_*.png")
@@ -317,8 +331,8 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
     
     content.append(Spacer(1, 15))
     
-    # 10. 优质新高股票筛选
-    content.append(Paragraph("10. 优质新高股票筛选", subtitle_style))
+    # 11. 优质新高股票筛选
+    content.append(Paragraph("11. 优质新高股票筛选", subtitle_style))
     
     # 优质新高股票筛选图
     filtered_new_high_fig = None
@@ -377,19 +391,6 @@ def create_pdf_report(output_filename="Stock_Market_Monitor.pdf", filtered_stock
             content.append(table)
     
     content.append(Spacer(1, 15))
-    
-    # 11. AI市场分析点评总结
-    if ai_analysis:
-        content.append(Paragraph("11. AI市场分析点评总结", subtitle_style))
-        content.append(Spacer(1, 10))
-        
-        # 将AI分析内容按段落分割并添加
-        ai_paragraphs = ai_analysis.split('\n\n')
-        for paragraph in ai_paragraphs:
-            if paragraph.strip():
-                content.append(Paragraph(paragraph.strip(), normal_style))
-                content.append(Spacer(1, 8))
-    
     # 添加页眉页脚
     def add_page_number(canvas, doc):
         page_num = canvas.getPageNumber()

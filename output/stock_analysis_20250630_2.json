@@ -1,0 +1,22 @@
+[
+  {
+    "ts_code": "002539.SZ",
+    "name": "云图控股",
+    "industry": "农药化肥",
+    "trade_date": "20250627",
+    "last_close": 10.263212797374898,
+    "total_mv": 1132844.8888,
+    "recent_return": 0.03991130820399125,
+    "rebound_ratio": 0.22191364478049536
+  },
+  {
+    "ts_code": "600711.SH",
+    "name": "ST盛屯",
+    "industry": "小金属",
+    "trade_date": "20250627",
+    "last_close": 6.344954814740436,
+    "total_mv": 1900726.1039,
+    "recent_return": 0.04948805460750849,
+    "rebound_ratio": 0.2805682819100256
+  }
+]

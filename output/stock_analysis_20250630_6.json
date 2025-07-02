@@ -1,0 +1,62 @@
+[
+  {
+    "ts_code": "002539.SZ",
+    "name": "云图控股",
+    "industry": "农药化肥",
+    "trade_date": "20250630",
+    "last_close": 10.263212797374898,
+    "total_mv": 1132844.8888,
+    "recent_return": 0.052749719416386176,
+    "rebound_ratio": 0.22191364478049536
+  },
+  {
+    "ts_code": "002925.SZ",
+    "name": "盈趣科技",
+    "industry": "元器件",
+    "trade_date": "20250630",
+    "last_close": 20.470907091808687,
+    "total_mv": 1397840.3276,
+    "recent_return": 0.13581806696146526,
+    "rebound_ratio": 0.2902369766045562
+  },
+  {
+    "ts_code": "002985.SZ",
+    "name": "北摩高科",
+    "industry": "航空",
+    "trade_date": "20250630",
+    "last_close": 40.07773255813954,
+    "total_mv": 1003857.14,
+    "recent_return": 0.1048210372534697,
+    "rebound_ratio": 0.1589278899919011
+  },
+  {
+    "ts_code": "600711.SH",
+    "name": "ST盛屯",
+    "industry": "小金属",
+    "trade_date": "20250630",
+    "last_close": 6.52034380961944,
+    "total_mv": 1953266.5002,
+    "recent_return": 0.053333333333333455,
+    "rebound_ratio": 0.2957319606638304
+  },
+  {
+    "ts_code": "603259.SH",
+    "name": "药明康德",
+    "industry": "化学制药",
+    "trade_date": "20250630",
+    "last_close": 74.16327868852458,
+    "total_mv": 19976270.6608,
+    "recent_return": 0.015921706105755273,
+    "rebound_ratio": 0.2691663305702347
+  },
+  {
+    "ts_code": "603444.SH",
+    "name": "吉比特",
+    "industry": "互联网",
+    "trade_date": "20250630",
+    "last_close": 356.6902641002685,
+    "total_mv": 2175281.0447,
+    "recent_return": 0.030721966205837115,
+    "rebound_ratio": 0.3871418504143793
+  }
+]

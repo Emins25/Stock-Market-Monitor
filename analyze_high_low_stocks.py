@@ -197,12 +197,27 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
     """
     logger.info(f"分析 {trade_date} 的{week_count}周新高新低...")
     
-    # 计算week_count周对应的天数（约等于week_count * 7）
-    days = week_count * 7
+    # 修正：基于交易日计算历史数据范围
+    # 52周约等于250个交易日（一年），26周约等于125个交易日
+    if week_count == 52:
+        # 52周新高新低：使用过去250个交易日
+        trade_days_count = 250
+        # 为了确保获取足够的历史数据，使用1.5年的自然日范围
+        calendar_days = 550  # 约1.5年
+    elif week_count == 26:
+        # 26周新高新低：使用过去125个交易日  
+        trade_days_count = 125
+        # 为了确保获取足够的历史数据，使用9个月的自然日范围
+        calendar_days = 280  # 约9个月
+    else:
+        # 其他周数：按每周5个交易日估算
+        trade_days_count = week_count * 5
+        # 为了确保获取足够的历史数据，使用更大的自然日范围
+        calendar_days = int(week_count * 7 * 1.5)
     
-    # 计算开始日期
+    # 计算开始日期（使用较大的自然日范围确保能获取足够的交易日数据）
     date_obj = datetime.strptime(trade_date, '%Y%m%d')
-    start_date = (date_obj - timedelta(days=days)).strftime('%Y%m%d')
+    start_date = (date_obj - timedelta(days=calendar_days)).strftime('%Y%m%d')
     
     # 缓存日期，避免对同一天重复处理
     cache_key = f"daily_data_{trade_date}"
@@ -247,7 +262,7 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
             
             # 获取历史价格数据
             hist_data = get_stock_price_data(pro, ts_code, start_date, trade_date)
-            if hist_data.empty or len(hist_data) < 20:  # 确保有足够的历史数据
+            if hist_data.empty or len(hist_data) < 50:  # 提高最小数据要求
                 continue
             
             # 排除当天的数据，只比较历史数据
@@ -255,9 +270,21 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
             if hist_data.empty:
                 continue
             
-            # 计算历史最高收盘价和最低收盘价
-            hist_high_close = hist_data['close'].max()
-            hist_low_close = hist_data['close'].min()
+            # 修正：只使用最近的指定交易日数据进行比较
+            # 按交易日期降序排列，取最近的trade_days_count个交易日
+            hist_data_sorted = hist_data.sort_values('trade_date', ascending=False)
+            if len(hist_data_sorted) > trade_days_count:
+                hist_data_recent = hist_data_sorted.head(trade_days_count)
+            else:
+                hist_data_recent = hist_data_sorted
+            
+            # 确保有足够的历史数据
+            if len(hist_data_recent) < min(trade_days_count * 0.8, 100):  # 至少要有80%的数据或100天
+                continue
+            
+            # 计算历史最高收盘价和最低收盘价（基于正确的交易日范围）
+            hist_high_close = hist_data_recent['close'].max()
+            hist_low_close = hist_data_recent['close'].min()
             
             # 判断是否创新高或新低
             # 新高：当日收盘价严格大于历史最高收盘价
@@ -267,7 +294,7 @@ def calculate_high_low_for_date(pro, trade_date, week_count, all_stocks):
             if current_close < hist_low_close:
                 low_count += 1
     
-    logger.info(f"{trade_date} {week_count}周新高数量: {high_count}, 新低数量: {low_count}")
+    logger.info(f"{trade_date} {week_count}周新高数量: {high_count}, 新低数量: {low_count} (基于{trade_days_count}个交易日)")
     return high_count, low_count
 
 def initial_data_load(pro, end_date, days=90, rebuild_db=False):
@@ -568,9 +595,16 @@ def plot_high_low_chart(df, week_count, end_date, save_fig=True, show_fig=True):
                     ha='center', va='top', fontsize=8, color='red')
     
     # 添加说明文字
+    if week_count == 52:
+        trade_days_note = "250个交易日（约1年）"
+    elif week_count == 26:
+        trade_days_note = "125个交易日（约半年）"
+    else:
+        trade_days_note = f"{week_count * 5}个交易日"
+        
     note_text = f"说明：\n" \
-                f"新高：当日收盘价达到{week_count}周最高\n" \
-                f"新低：当日收盘价达到{week_count}周最低\n" \
+                f"新高：当日收盘价超过过去{trade_days_note}的最高收盘价\n" \
+                f"新低：当日收盘价低于过去{trade_days_note}的最低收盘价\n" \
                 f"净新高：新高数量减去新低数量"
     plt.figtext(0.5, 0.01, note_text, fontsize=9, ha='center')
     

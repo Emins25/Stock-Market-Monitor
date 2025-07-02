@@ -462,7 +462,7 @@ def main():
     
     # 使用命令行参数生成报告
     generate_market_report(
-        date='20250627',  # 使用命令行参数指定的日期
+        date='20250701',  # 使用命令行参数指定的日期
         top_industry_count=args.industries, 
         top_stock_count=args.stocks,
         token=args.token,
